@@ -38,7 +38,7 @@ desktop.ini
 input_images/
 output_images/
 
-* === Images ===
+# === Images ===
 *.jpg
 *.jpeg
 *.png
