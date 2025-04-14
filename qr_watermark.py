@@ -1,8 +1,10 @@
-"""
+
+""" 
 Module/Script Name: qr_watermark.py
 
 Description:
-Batch watermarks all images in the input directory with a generated QR code linking to a given URL.
+Batch watermarks all images in the input directory with a generated QR code (top-left)
+and a styled text overlay (bottom-left), with auto-scaling to prevent text overflow.
 
 Author(s):
 Skippy the Magnificent with an eensy weensy bit of help from that filthy monkey, Big G
@@ -14,81 +16,94 @@ Last Modified Date:
 2025-04-14
 
 Comments:
-- v1.00: Initial version. Batch watermarking with QR overlay, bottom-right placement.
+- v1.00: Initial QR watermark implementation
+- v1.01: Added text overlay with Playfair Display and drop shadow
+- v1.02: Auto-scales text to fit image, moved QR to top-left
 """
 
 import os
 import qrcode
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from glob import glob
 
-# --- Configuration ---
-INPUT_DIR = "input_images"
-OUTPUT_DIR = "output_images"
-QR_LINK = "https://salvometalworks.com/"  # UPDATE THIS
-QR_SIZE_RATIO = 0.15  # QR will be 15% of image width
-QR_OPACITY = 0.85  # Opacity from 0.0 to 1.0
-QR_POSITION = "bottom-right"  # Options: 'bottom-right', 'top-left', etc.
+# === CONFIGURATION ===
+INPUT_DIR = 'input_images'
+OUTPUT_DIR = 'output_images'
+QR_LINK = 'https://yourwebsite.com/free-quote'
+QR_SIZE_RATIO = 0.15
+QR_OPACITY = 0.85
+TEXT_OVERLAY = "Salvo Metal Works – Custom Architectural Metal Fabrication"
+TEXT_COLOR = (250, 249, 246)  # Antique White
+SHADOW_COLOR = (0, 0, 0, 128)  # Semi-transparent black
+TEXT_POSITION = 'bottom-left'
+FONT_SIZE_RATIO = 0.035  # Initial guess
 
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# --- Generate QR Code ---
+# Generate QR code
 def generate_qr_code(link):
     qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_H)
     qr.add_data(link)
     qr.make(fit=True)
-    img_qr = qr.make_image(fill_color="black", back_color="white").convert("RGBA")
-    return img_qr
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGBA")
+    return qr_img
 
+# Add QR and text overlay
+def add_watermarks(image_path, qr_img, font_path='PlayfairDisplay-Regular.ttf'):
+    img = Image.open(image_path).convert("RGBA")
+    img_w, img_h = img.size
 
-# --- Apply Watermark ---
-def add_qr_watermark(base_image, qr_image, position="bottom-right", opacity=0.85):
-    base = base_image.convert("RGBA")
-    qr_w, qr_h = qr_image.size
-    img_w, img_h = base.size
+    # Resize QR
+    qr_size = int(img_w * QR_SIZE_RATIO)
+    qr_resized = qr_img.resize((qr_size, qr_size))
 
-    positions = {
-        "bottom-right": (img_w - qr_w - 10, img_h - qr_h - 10),
-        "top-left": (10, 10),
-        "top-right": (img_w - qr_w - 10, 10),
-        "bottom-left": (10, img_h - qr_h - 10),
-        "center": ((img_w - qr_w) // 2, (img_h - qr_h) // 2),
-    }
-    pos = positions.get(position, (img_w - qr_w - 10, img_h - qr_h - 10))
+    # Adjust QR opacity
+    alpha = qr_resized.split()[3]
+    alpha = ImageEnhance.Brightness(alpha).enhance(QR_OPACITY)
+    qr_resized.putalpha(alpha)
 
-    # Adjust opacity
-    qr_image = qr_image.copy()
-    alpha = qr_image.split()[3]
-    alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
-    qr_image.putalpha(alpha)
+    # Paste QR (top-left corner)
+    qr_x = 10
+    qr_y = 10
+    img.paste(qr_resized, (qr_x, qr_y), qr_resized)
 
-    # Composite images
-    base.paste(qr_image, pos, qr_image)
-    return base.convert("RGB")
+    # Draw text
+    draw = ImageDraw.Draw(img)
+    max_width = img_w - 20
+    font_size = int(img_w * FONT_SIZE_RATIO)
 
+    # Auto-scale font to fit within width
+    while font_size > 10:
+        font = ImageFont.truetype(font_path, font_size)
+        bbox = draw.textbbox((0, 0), TEXT_OVERLAY, font=font)
+        text_w = bbox[2] - bbox[0]
+        if text_w <= max_width:
+            break
+        font_size -= 1
 
-# --- Main Batch Runner ---
-def batch_watermark_images():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    qr = generate_qr_code(QR_LINK)
+    text_h = bbox[3] - bbox[1]
+    text_x = 10
+    text_y = img_h - text_h - 10
 
+    # Drop shadow
+    draw.text((text_x + 2, text_y + 2), TEXT_OVERLAY, font=font, fill=SHADOW_COLOR)
+    # Foreground
+    draw.text((text_x, text_y), TEXT_OVERLAY, font=font, fill=TEXT_COLOR)
+
+    return img.convert("RGB")
+
+# Run batch
+def main():
+    qr_image = generate_qr_code(QR_LINK)
     for filepath in glob(f"{INPUT_DIR}/*.*"):
         try:
-            img = Image.open(filepath)
-            img_w, img_h = img.size
-
-            qr_scaled = qr.resize(
-                (int(img_w * QR_SIZE_RATIO), int(img_w * QR_SIZE_RATIO))
-            )
-            watermarked = add_qr_watermark(img, qr_scaled, QR_POSITION, QR_OPACITY)
-
-            filename = os.path.basename(filepath)
-            output_path = os.path.join(OUTPUT_DIR, filename)
-            watermarked.save(output_path, "JPEG", quality=85)
-
-            print(f"✅ Watermarked: {filename}")
+            result = add_watermarks(filepath, qr_image)
+            output_filename = os.path.basename(filepath)
+            output_path = os.path.join(OUTPUT_DIR, output_filename)
+            result.save(output_path, "JPEG", quality=85)
+            print(f"✅ Watermarked: {output_filename}")
         except Exception as e:
             print(f"❌ Error processing {filepath}: {e}")
 
-
 if __name__ == "__main__":
-    batch_watermark_images()
+    main()

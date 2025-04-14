@@ -1,0 +1,51 @@
+
+# === PYTHON PROJECT STANDARD ===
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.pyd
+*.pyo
+
+# === ENVIRONMENTS ===
+.env
+.venv/
+venv/
+env/
+ENV/
+*.env
+
+# === OS JUNK ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === IDEs ===
+.vscode/
+.idea/
+*.code-workspace
+
+# === LOG FILES ===
+*.log
+*.gz
+*.zip
+
+# === IMAGE FOLDERS FOR WATERMARK PROJECT ===
+input_images/
+output_images/
+
+# === JUPYTER NOTEBOOKS (Optional) ===
+.ipynb_checkpoints/
+
+# === CONFIG / CREDENTIAL BACKUPS ===
+config.json
+credentials.json
+secrets.json
+
+# === PIP REQUIREMENTS ===
+pip-log.txt
+pip-delete-this-directory.txt
