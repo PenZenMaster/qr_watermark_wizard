@@ -30,7 +30,7 @@ from glob import glob
 # === CONFIGURATION ===
 INPUT_DIR = "input_images"
 OUTPUT_DIR = "output_images"
-QR_LINK = "https://yourwebsite.com/free-quote"
+QR_LINK = "https://salvometalworks.com"
 QR_SIZE_RATIO = 0.15
 QR_OPACITY = 0.85
 TEXT_OVERLAY = (
