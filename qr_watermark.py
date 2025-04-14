@@ -4,7 +4,7 @@ Module/Script Name: qr_watermark.py
 
 Description:
 Batch watermarks all images in the input directory with a generated QR code (top-left)
-and a styled text overlay (bottom-left), with auto-scaling to prevent text overflow.
+and a styled text overlay (bottom-left), with auto-scaling and 5% vertical padding.
 
 Author(s):
 Skippy the Magnificent with an eensy weensy bit of help from that filthy monkey, Big G
@@ -19,6 +19,7 @@ Comments:
 - v1.00: Initial QR watermark implementation
 - v1.01: Added text overlay with Playfair Display and drop shadow
 - v1.02: Auto-scales text to fit image, moved QR to top-left
+- v1.03: Added 5% vertical padding below text overlay
 """
 
 import os
@@ -83,7 +84,8 @@ def add_watermarks(image_path, qr_img, font_path='PlayfairDisplay-Regular.ttf'):
 
     text_h = bbox[3] - bbox[1]
     text_x = 10
-    text_y = img_h - text_h - 10
+    padding_bottom = int(img_h * 0.05)
+    text_y = img_h - text_h - padding_bottom
 
     # Drop shadow
     draw.text((text_x + 2, text_y + 2), TEXT_OVERLAY, font=font, fill=SHADOW_COLOR)
