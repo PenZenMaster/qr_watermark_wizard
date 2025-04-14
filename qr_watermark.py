@@ -3,8 +3,8 @@
 Module/Script Name: qr_watermark.py
 
 Description:
-Batch watermarks all images in the input directory with a generated QR code (top-left)
-and a styled text overlay (bottom-left), with auto-scaling and 5% vertical padding.
+Batch watermarks all images in the input directory with a generated QR code (top-right, 1% VH padding)
+and a styled text overlay (bottom-left), with auto-scaling and 5% VH bottom padding.
 
 Author(s):
 Skippy the Magnificent with an eensy weensy bit of help from that filthy monkey, Big G
@@ -18,8 +18,9 @@ Last Modified Date:
 Comments:
 - v1.00: Initial QR watermark implementation
 - v1.01: Added text overlay with Playfair Display and drop shadow
-- v1.02: Auto-scales text to fit image, moved QR to top-left
-- v1.03: Added 5% vertical padding below text overlay
+- v1.02: Auto-scaling text, QR moved to top-left
+- v1.03: Added 5% VH padding below text
+- v1.04: QR repositioned to upper-right with 1% VH top/right padding
 """
 
 import os
@@ -36,8 +37,9 @@ QR_OPACITY = 0.85
 TEXT_OVERLAY = "Salvo Metal Works – Custom Architectural Metal Fabrication"
 TEXT_COLOR = (250, 249, 246)  # Antique White
 SHADOW_COLOR = (0, 0, 0, 128)  # Semi-transparent black
-TEXT_POSITION = 'bottom-left'
 FONT_SIZE_RATIO = 0.035  # Initial guess
+TEXT_PADDING_BOTTOM_RATIO = 0.05  # 5% VH
+QR_PADDING_VH_RATIO = 0.01  # 1% VH for top/right padding
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -63,9 +65,10 @@ def add_watermarks(image_path, qr_img, font_path='PlayfairDisplay-Regular.ttf'):
     alpha = ImageEnhance.Brightness(alpha).enhance(QR_OPACITY)
     qr_resized.putalpha(alpha)
 
-    # Paste QR (top-left corner)
-    qr_x = 10
-    qr_y = 10
+    # Paste QR (top-right corner with 1% VH padding)
+    pad = int(img_h * QR_PADDING_VH_RATIO)
+    qr_x = img_w - qr_size - pad
+    qr_y = pad
     img.paste(qr_resized, (qr_x, qr_y), qr_resized)
 
     # Draw text
@@ -84,7 +87,7 @@ def add_watermarks(image_path, qr_img, font_path='PlayfairDisplay-Regular.ttf'):
 
     text_h = bbox[3] - bbox[1]
     text_x = 10
-    padding_bottom = int(img_h * 0.05)
+    padding_bottom = int(img_h * TEXT_PADDING_BOTTOM_RATIO)
     text_y = img_h - text_h - padding_bottom
 
     # Drop shadow
