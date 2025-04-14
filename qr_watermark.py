@@ -26,7 +26,7 @@ from glob import glob
 INPUT_DIR = "input_images"
 OUTPUT_DIR = "output_images"
 QR_LINK = "https://salvometalworks.com/"  # UPDATE THIS
-QR_SIZE_RATIO = 0.10  # QR will be 10% of image width
+QR_SIZE_RATIO = 0.15  # QR will be 15% of image width
 QR_OPACITY = 0.85  # Opacity from 0.0 to 1.0
 QR_POSITION = "bottom-right"  # Options: 'bottom-right', 'top-left', etc.
 
