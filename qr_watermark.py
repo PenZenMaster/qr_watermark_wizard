@@ -1,5 +1,4 @@
-
-""" 
+"""
 Module/Script Name: qr_watermark.py
 
 Description:
@@ -29,12 +28,14 @@ from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from glob import glob
 
 # === CONFIGURATION ===
-INPUT_DIR = 'input_images'
-OUTPUT_DIR = 'output_images'
-QR_LINK = 'https://yourwebsite.com/free-quote'
+INPUT_DIR = "input_images"
+OUTPUT_DIR = "output_images"
+QR_LINK = "https://yourwebsite.com/free-quote"
 QR_SIZE_RATIO = 0.15
 QR_OPACITY = 0.85
-TEXT_OVERLAY = "Salvo Metal Works – Custom Architectural Metal Fabrication"
+TEXT_OVERLAY = (
+    "Salvo Metal Works – Custom Architectural Metal Fabrication \nNaperville, IL"
+)
 TEXT_COLOR = (250, 249, 246)  # Antique White
 SHADOW_COLOR = (0, 0, 0, 128)  # Semi-transparent black
 FONT_SIZE_RATIO = 0.035  # Initial guess
@@ -42,6 +43,7 @@ TEXT_PADDING_BOTTOM_RATIO = 0.05  # 5% VH
 QR_PADDING_VH_RATIO = 0.01  # 1% VH for top/right padding
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
 
 # Generate QR code
 def generate_qr_code(link):
@@ -51,8 +53,9 @@ def generate_qr_code(link):
     qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGBA")
     return qr_img
 
+
 # Add QR and text overlay
-def add_watermarks(image_path, qr_img, font_path='PlayfairDisplay-Regular.ttf'):
+def add_watermarks(image_path, qr_img, font_path="PlayfairDisplay-Regular.ttf"):
     img = Image.open(image_path).convert("RGBA")
     img_w, img_h = img.size
 
@@ -97,6 +100,7 @@ def add_watermarks(image_path, qr_img, font_path='PlayfairDisplay-Regular.ttf'):
 
     return img.convert("RGB")
 
+
 # Run batch
 def main():
     qr_image = generate_qr_code(QR_LINK)
@@ -109,6 +113,7 @@ def main():
             print(f"✅ Watermarked: {output_filename}")
         except Exception as e:
             print(f"❌ Error processing {filepath}: {e}")
+
 
 if __name__ == "__main__":
     main()
