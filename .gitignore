@@ -38,6 +38,15 @@ desktop.ini
 input_images/
 output_images/
 
+* === Images ===
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.webp
+
 # === JUPYTER NOTEBOOKS (Optional) ===
 .ipynb_checkpoints/
 
