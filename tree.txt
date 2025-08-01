@@ -1,0 +1,38 @@
+Folder PATH listing for volume TOSHIBA EXT
+Volume serial number is B0D0-A4E4
+E:.
+³   .gitignore
+³   .gitingnore
+³   launch_designer.bat
+³   PlayfairDisplay-Regular.ttf
+³   qr_watermark.py
+³   tree.txt
+³   
+ÃÄÄÄconfig
+³       settings.json
+³       
+ÃÄÄÄinput_images
+³       rename_images.bat
+³       SalvoMetalWorksCustomChimneyShrouds_02.webp
+³       SalvoMetalWorksCustomChimneyShroud_01.webp
+³       SalvoMetalWorksCustomChimneyShroud_02.jpg
+³       SalvoMetalWorksCustomChimneyShroud_03.jpg
+³       SalvoMetalWorksCustomChimneyShroud_04.jpg
+³       SalvoMetalWorksCustomChimneyShroud_05.jpg
+³       SalvoMetalWorksCustomChimneyShroud_06.jpg
+³       SalvoMetalWorksCustomChimneyShroud_07.jpg
+³       
+ÃÄÄÄoutput_images
+³       DSC09196.jpeg
+³       SalvoMetalWorksCustomChimneyShrouds_02.webp
+³       SalvoMetalWorksCustomChimneyShroud_01.webp
+³       SalvoMetalWorksCustomChimneyShroud_02.jpg
+³       SalvoMetalWorksCustomChimneyShroud_03.jpg
+³       SalvoMetalWorksCustomChimneyShroud_04.jpg
+³       SalvoMetalWorksCustomChimneyShroud_05.jpg
+³       SalvoMetalWorksCustomChimneyShroud_06.jpg
+³       SalvoMetalWorksCustomChimneyShroud_07.jpg
+³       
+ÀÄÄÄui
+        designer.ui
+        

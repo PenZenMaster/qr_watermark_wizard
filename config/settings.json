@@ -1,22 +1,22 @@
 {
-    "input_dir": "input_images",
-    "output_dir": "output_images",
-    "qr_link": "https://salvometalworks.com",
-    "qr_size_ratio": 0.15,
-    "qr_opacity": 0.85,
-    "text_overlay": "Salvo Metal Works – Custom Architectural Metal Fabrication\nNaperville, IL",
-    "text_color": [
-        250,
-        249,
-        246
-    ],
-    "shadow_color": [
-        0,
-        0,
-        0,
-        128
-    ],
-    "font_size_ratio": 0.035,
-    "text_padding_bottom_ratio": 0.05,
-    "qr_padding_vh_ratio": 0.01
+  "input_dir": "input_images",
+  "output_dir": "output_images",
+  "qr_link": "https://salvometalworks.com/product-category/custom-chimney-shrouds/",
+  "qr_size_ratio": 0.15,
+  "qr_opacity": 0.85,
+  "text_overlay": "Custom Chimney Shrouds\nSalvo Metal Works (866) 713-3396",
+  "text_color": [
+    255,
+    0,
+    0
+  ],
+  "shadow_color": [
+    0,
+    0,
+    0,
+    128
+  ],
+  "font_size_ratio": 0.04,
+  "text_padding_bottom_ratio": 0.17,
+  "qr_padding_vh_ratio": 0.01
 }

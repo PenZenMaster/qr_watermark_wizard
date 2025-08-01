@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WatermarkWizard</class>
+ <widget class="QMainWindow" name="WatermarkWizard">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>700</width><height>600</height></rect>
+  </property>
+  <property name="windowTitle"><string>Salvo Watermark Wizard</string></property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+
+    <item>
+     <layout class="QFormLayout" name="formLayout">
+
+      <item row="0" column="0"><widget class="QLabel" name="labelInput"><property name="text"><string>Input Folder</string></property></widget></item>
+      <item row="0" column="1"><widget class="QLineEdit" name="inputDir"/></item>
+      <item row="0" column="2"><widget class="QPushButton" name="browseInputBtn"><property name="text"><string>Browse</string></property></widget></item>
+
+      <item row="1" column="0"><widget class="QLabel" name="labelOutput"><property name="text"><string>Output Folder</string></property></widget></item>
+      <item row="1" column="1"><widget class="QLineEdit" name="outputDir"/></item>
+      <item row="1" column="2"><widget class="QPushButton" name="browseOutputBtn"><property name="text"><string>Browse</string></property></widget></item>
+
+      <item row="2" column="0"><widget class="QLabel" name="labelQr"><property name="text"><string>QR Link</string></property></widget></item>
+      <item row="2" column="1" colspan="2"><widget class="QLineEdit" name="qrLink"/></item>
+
+      <item row="3" column="0"><widget class="QLabel" name="labelText"><property name="text"><string>Overlay Text</string></property></widget></item>
+      <item row="3" column="1" colspan="2"><widget class="QTextEdit" name="overlayText"/></item>
+
+      <item row="4" column="0"><widget class="QLabel" name="labelFontSize"><property name="text"><string>Font Size</string></property></widget></item>
+      <item row="4" column="1" colspan="2"><widget class="QSlider" name="fontSizeSlider"><property name="orientation"><enum>Qt::Horizontal</enum></property></widget></item>
+
+      <item row="5" column="0"><widget class="QLabel" name="labelPadding"><property name="text"><string>Text Padding (Bottom)</string></property></widget></item>
+      <item row="5" column="1" colspan="2"><widget class="QSlider" name="textPaddingSlider"><property name="orientation"><enum>Qt::Horizontal</enum></property></widget></item>
+
+      <item row="6" column="0"><widget class="QLabel" name="labelQRPadding"><property name="text"><string>QR Padding (Top/Right)</string></property></widget></item>
+      <item row="6" column="1" colspan="2"><widget class="QSlider" name="qrPaddingSlider"><property name="orientation"><enum>Qt::Horizontal</enum></property></widget></item>
+
+      <item row="7" column="0"><widget class="QLabel" name="labelTextColor"><property name="text"><string>Text Color</string></property></widget></item>
+      <item row="7" column="1"><widget class="QPushButton" name="textColorBtn"><property name="text"><string>Pick</string></property></widget></item>
+      <item row="7" column="2"><widget class="QPushButton" name="shadowColorBtn"><property name="text"><string>Pick Shadow Color</string></property></widget></item>
+
+     </layout>
+    </item>
+
+    <item>
+     <widget class="QPushButton" name="runBtn"><property name="text"><string>Run Watermark</string></property></widget>
+    </item>
+
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
