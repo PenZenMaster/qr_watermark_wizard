@@ -1,13 +1,13 @@
 {
-  "input_dir": "input_images",
-  "output_dir": "output_images",
+  "input_dir": "E:/projects/qr_watermark_wizard/input_images",
+  "output_dir": "E:/projects/qr_watermark_wizard/output_images",
   "qr_link": "https://salvometalworks.com/product-category/custom-chimney-shrouds/",
   "qr_size_ratio": 0.15,
   "qr_opacity": 0.85,
   "text_overlay": "Custom Chimney Shrouds\nSalvo Metal Works (866) 713-3396",
   "text_color": [
     255,
-    0,
+    255,
     0
   ],
   "shadow_color": [
@@ -16,7 +16,8 @@
     0,
     128
   ],
-  "font_size_ratio": 0.04,
-  "text_padding_bottom_ratio": 0.17,
-  "qr_padding_vh_ratio": 0.01
+  "font_size_ratio": 0.05,
+  "text_padding_bottom_ratio": 0.041666666666666664,
+  "qr_padding_vh_ratio": 0.01574074074074074,
+  "font_family": "Bahnschrift"
 }
