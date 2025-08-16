@@ -16,7 +16,7 @@ Last Modified Date:
 08-01-2025
 
 Version:
-v1.07.33
+v1.07.31
 
 Comments:
 - v1.07.31: Fixed all Pylance errors including method definitions, syntax issues, and removed obsolete method references.
@@ -27,7 +27,7 @@ import os
 import json
 import subprocess
 import io
-from typing import Optional, cast
+from typing import Optional, cast, Any
 from PyQt6 import QtWidgets
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -44,6 +44,11 @@ from PyQt6.QtWidgets import (
     QLayout,
     QComboBox,
     QFontComboBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QCheckBox,
+    QPushButton,
+    QHBoxLayout,
 )
 from PyQt6.QtGui import QColor, QPixmap, QFont
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer
@@ -88,31 +93,53 @@ class WatermarkThread(QThread):
             # Create output directory
             os.makedirs(output_dir, exist_ok=True)
 
-            # Get list of image files
-            image_files = [
-                f
-                for f in os.listdir(input_dir)
-                if f.lower().endswith((".jpg", ".jpeg", ".png"))
-            ]
+            # Build list of images (recursive if enabled)
+            paths = []
+            recursive = bool(qr_watermark.PROCESS_RECURSIVE)
+            if recursive:
+                for root, _dirs, files in os.walk(input_dir):
+                    for f in files:
+                        if f.lower().endswith(
+                            (".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp")
+                        ):
+                            paths.append(os.path.join(root, f))
+            else:
+                for f in os.listdir(input_dir):
+                    if f.lower().endswith(
+                        (".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp")
+                    ):
+                        paths.append(os.path.join(input_dir, f))
 
-            if not image_files:
+            if not paths:
                 self.error.emit("No image files found in input directory.")
                 return
 
             processed_count = 0
             error_count = 0
 
-            self.progress.emit(f"Starting processing of {len(image_files)} images...")
+            self.progress.emit(f"Starting processing of {len(paths)} images...")
 
-            for filename in image_files:
+            for full in paths:
                 try:
-                    input_path = os.path.join(input_dir, filename)
-                    qr_watermark.apply_watermark(input_path, return_image=False)
+                    if recursive:
+                        rel = os.path.relpath(os.path.dirname(full), input_dir)
+                        out_dir = (
+                            os.path.join(qr_watermark.OUTPUT_DIR, rel)
+                            if rel != "."
+                            else qr_watermark.OUTPUT_DIR
+                        )
+                    else:
+                        out_dir = qr_watermark.OUTPUT_DIR
+                    qr_watermark.apply_watermark(
+                        full, return_image=False, out_dir=out_dir
+                    )
                     processed_count += 1
-                    self.progress.emit(f"Processed: {filename}")
+                    self.progress.emit(f"Processed: {os.path.basename(full)}")
                 except Exception as e:
                     error_count += 1
-                    self.progress.emit(f"Error processing {filename}: {str(e)}")
+                    self.progress.emit(
+                        f"Error processing {os.path.basename(full)}: {str(e)}"
+                    )
 
             if error_count == 0:
                 self.progress.emit(
@@ -129,6 +156,12 @@ class WatermarkThread(QThread):
 
 
 class WatermarkWizard(QtWidgets.QMainWindow):
+    # Class-level attribute stubs for Pylance/typing
+    recursiveCheck: Optional[Any]
+    collisionCombo: Optional[Any]
+    previewSeoBtn: Optional[Any]
+    exportMapBtn: Optional[Any]
+
     def __init__(self) -> None:
         super().__init__()
         self.ui = Ui_WatermarkWizard()
@@ -149,7 +182,13 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         self.bind_widgets()
         self.setup_font_controls()  # Replace with font family + size controls
         self.setup_slider_labels()
+        # Predeclare dynamic UI attrs for type-checkers/runtime safety
+        self.recursiveCheck: Optional[Any] = None
+        self.collisionCombo: Optional[Any] = None
+        self.previewSeoBtn: Optional[Any] = None
+        self.exportMapBtn: Optional[Any] = None
         self.load_values()
+        self.add_extra_controls()
 
         # Use timer to add tick labels after UI is fully rendered
         QTimer.singleShot(100, self.add_tick_labels)
@@ -844,65 +883,266 @@ class WatermarkWizard(QtWidgets.QMainWindow):
 
         # Update SEO rename setting
         self.config["seo_rename"] = self.ui.seoRenameCheck.isChecked()
+        # New slug controls
+        recursive_check = getattr(self, "recursiveCheck", None)
+        self.config["process_recursive"] = bool(
+            recursive_check and recursive_check.isChecked()
+        )
+        collision_combo = getattr(self, "collisionCombo", None)
+        if collision_combo:
+            self.config["collision_strategy"] = collision_combo.currentText()
+        # Optional advanced fields (keep if already present)
+        self.config.setdefault("slug_max_words", 6)
+        self.config.setdefault("slug_min_len", 3)
+        self.config.setdefault("slug_stopwords", [])
+        self.config.setdefault("slug_whitelist", [])
+        self.config.setdefault("slug_prefix", "")
+        self.config.setdefault("slug_location", "")
 
     def add_tick_labels(self) -> None:
-        """Add range indicators for remaining sliders (padding only - font size is now a combo)"""
+        """Clean up any existing tick labels (range indicators removed to prevent UI artifacts)"""
         try:
-            print("Adding tick labels for sliders...")
-
             # Clear existing tick labels
             for label in self.tick_labels:
                 label.deleteLater()
             self.tick_labels.clear()
-
-            # Create a clean font for tick labels
-            tick_font = QFont()
-            tick_font.setPointSize(8)
-            tick_font.setBold(False)
-
-            # Text Padding Slider - range label to the right
-            text_slider = self.ui.textPaddingSlider
-            text_parent = cast(Optional[QWidget], text_slider.parent())
-
-            if text_parent:
-                slider_rect = text_slider.geometry()
-
-                range_label = QLabel("0px → 500px", text_parent)
-                range_label.setFont(tick_font)
-                range_label.setStyleSheet("color: #666; background: transparent;")
-
-                label_x = slider_rect.x() + slider_rect.width() + 10
-                label_y = slider_rect.y() + (slider_rect.height() // 2) - 8
-
-                range_label.setGeometry(label_x, label_y, 80, 16)
-                range_label.show()
-                self.tick_labels.append(range_label)
-
-            # QR Padding Slider - range label to the right
-            qr_slider = self.ui.qrPaddingSlider
-            qr_parent = cast(Optional[QWidget], qr_slider.parent())
-
-            if qr_parent:
-                slider_rect = qr_slider.geometry()
-
-                range_label = QLabel("0px → 300px", qr_parent)
-                range_label.setFont(tick_font)
-                range_label.setStyleSheet("color: #666; background: transparent;")
-
-                label_x = slider_rect.x() + slider_rect.width() + 10
-                label_y = slider_rect.y() + (slider_rect.height() // 2) - 8
-
-                range_label.setGeometry(label_x, label_y, 80, 16)
-                range_label.show()
-                self.tick_labels.append(range_label)
-
-            print(f"Created {len(self.tick_labels)} range labels for sliders")
+            print("Cleaned up tick labels")
 
         except Exception as e:
-            print(f"Could not add tick labels: {e}")
-            import traceback
+            print(f"Could not clean up tick labels: {e}")
 
-            traceback.print_exc()
+    def add_extra_controls(self) -> None:
+        """Dynamically add extra controls without touching the .ui file."""
+        try:
+            from PyQt6.QtWidgets import (
+                QCheckBox,
+                QPushButton,
+                QComboBox,
+                QBoxLayout,
+                QGridLayout,
+                QFormLayout,
+            )
+
+            host = self.ui.runBtn.parentWidget()
+            layout = host.layout() if host else None
+            if not layout:
+                print("add_extra_controls: no layout host found")
+                return
+
+            # Controls
+            self.recursiveCheck = QCheckBox("Process subfolders", host)
+            self.recursiveCheck.setChecked(
+                bool(self.config.get("process_recursive", False))
+            )
+
+            self.collisionCombo = QComboBox(host)
+            self.collisionCombo.addItems(["counter", "timestamp"])
+            current = self.config.get("collision_strategy", "counter")
+            idx = self.collisionCombo.findText(current) if current else 0
+            self.collisionCombo.setCurrentIndex(idx if idx >= 0 else 0)
+
+            self.previewSeoBtn = QPushButton("Preview SEO Names", host)
+            self.exportMapBtn = QPushButton("Export Mapping CSV", host)
+
+            # Insert before Run button when we can; otherwise append
+            run_index = None
+            if isinstance(layout, QBoxLayout):
+                for i in range(layout.count()):
+                    item = layout.itemAt(i)
+                    if item and item.widget() is self.ui.runBtn:
+                        run_index = i
+                        break
+                if run_index is None:
+                    run_index = layout.count()
+                layout.insertWidget(run_index, self.previewSeoBtn)
+                layout.insertWidget(run_index + 1, self.exportMapBtn)
+                layout.insertWidget(run_index + 2, self.collisionCombo)
+                layout.insertWidget(run_index + 3, self.recursiveCheck)
+            else:
+                # Generic layouts (QGridLayout/QFormLayout/unknown): just append
+                for w in (
+                    self.previewSeoBtn,
+                    self.exportMapBtn,
+                    self.collisionCombo,
+                    self.recursiveCheck,
+                ):
+                    layout.addWidget(w)
+
+            # Wire signals
+            self.previewSeoBtn.clicked.connect(self.preview_seo_names)
+            self.exportMapBtn.clicked.connect(self.export_mapping_csv)
+            print("add_extra_controls: controls added")
+
+        except Exception as e:
+            print(f"add_extra_controls error: {e}")
+
+    def preview_seo_names(self) -> None:
+        """Show a small dialog listing first 10 filename → SEO slug mappings (no writes)."""
+        try:
+            self.update_config_from_ui()
+            save_config(self.config)
+            import os, rename_img
+            from PyQt6.QtWidgets import (
+                QDialog,
+                QVBoxLayout,
+                QTableWidget,
+                QTableWidgetItem,
+                QPushButton,
+                QHBoxLayout,
+                QMessageBox,
+            )
+
+            # Configure slug per current settings
+            rename_img.configure_slug(
+                max_words=self.config.get("slug_max_words", 6),
+                min_len=self.config.get("slug_min_len", 3),
+                stopwords=self.config.get("slug_stopwords", []),
+                whitelist=self.config.get("slug_whitelist", []),
+                prefix=self.config.get("slug_prefix", ""),
+                location=self.config.get("slug_location", ""),
+            )
+
+            input_dir = self.config.get("input_dir", "")
+            if not input_dir or not os.path.isdir(input_dir):
+                QMessageBox.information(
+                    self,
+                    "Preview SEO Names",
+                    "Input directory is not set or does not exist.",
+                )
+                return
+
+            paths = []
+            recursive = bool(self.config.get("process_recursive", False))
+            if recursive:
+                for root, _dirs, files in os.walk(input_dir):
+                    for f in files:
+                        if f.lower().endswith(
+                            (".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp")
+                        ):
+                            paths.append(os.path.join(root, f))
+                    if len(paths) >= 10:
+                        break
+            else:
+                for f in os.listdir(input_dir):
+                    if f.lower().endswith(
+                        (".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp")
+                    ):
+                        paths.append(os.path.join(input_dir, f))
+                        if len(paths) >= 10:
+                            break
+
+            if not paths:
+                QMessageBox.information(
+                    self, "Preview SEO Names", "No images found to preview."
+                )
+                return
+
+            table = QTableWidget(len(paths), 3, self)
+            table.setHorizontalHeaderLabels(
+                ["Original", "Proposed SEO Name", "Relative Folder"]
+            )
+            for r, full in enumerate(paths):
+                stem = os.path.splitext(os.path.basename(full))[0]
+                rel = os.path.relpath(os.path.dirname(full), input_dir)
+                table.setItem(r, 0, QTableWidgetItem(os.path.basename(full)))
+                table.setItem(
+                    r, 1, QTableWidgetItem(rename_img.seo_friendly_name(stem))
+                )
+                table.setItem(r, 2, QTableWidgetItem("" if rel == "." else rel))
+
+            dlg = QDialog(self)
+            dlg.setWindowTitle("SEO Filename Preview")
+            vbox = QVBoxLayout(dlg)
+            vbox.addWidget(table)
+            btns = QHBoxLayout()
+            export_btn = QPushButton("Export CSV…", dlg)
+            close_btn = QPushButton("Close", dlg)
+            btns.addWidget(export_btn)
+            btns.addWidget(close_btn)
+            vbox.addLayout(btns)
+            export_btn.clicked.connect(self.export_mapping_csv)
+            close_btn.clicked.connect(dlg.close)
+            dlg.resize(800, 400)
+            dlg.exec()
+
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+
+            QMessageBox.critical(self, "Preview SEO Names", f"Error: {e}")
+
+    def export_mapping_csv(self) -> None:
+        """Export a CSV of original path → proposed filename (no writes)."""
+        try:
+            self.update_config_from_ui()
+            save_config(self.config)
+            import os, csv, rename_img
+            from PyQt6.QtWidgets import QFileDialog, QMessageBox
+
+            # Configure slug per current settings
+            rename_img.configure_slug(
+                max_words=self.config.get("slug_max_words", 6),
+                min_len=self.config.get("slug_min_len", 3),
+                stopwords=self.config.get("slug_stopwords", []),
+                whitelist=self.config.get("slug_whitelist", []),
+                prefix=self.config.get("slug_prefix", ""),
+                location=self.config.get("slug_location", ""),
+            )
+
+            input_dir = self.config.get("input_dir", "")
+            if not input_dir or not os.path.isdir(input_dir):
+                QMessageBox.information(
+                    self,
+                    "Export Mapping",
+                    "Input directory is not set or does not exist.",
+                )
+                return
+
+            out_csv, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save mapping CSV",
+                os.path.join(self.config.get("output_dir", ""), "rename_map.csv"),
+                "CSV Files (*.csv)",
+            )
+            if not out_csv:
+                return
+
+            rows = []
+            if self.config.get("process_recursive", False):
+                for root, _dirs, files in os.walk(input_dir):
+                    for f in files:
+                        if f.lower().endswith(
+                            (".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp")
+                        ):
+                            full = os.path.join(root, f)
+                            stem = os.path.splitext(os.path.basename(full))[0]
+                            slug = rename_img.seo_friendly_name(stem)
+                            rel = os.path.relpath(root, input_dir)
+                            rows.append(
+                                [full, os.path.join(rel, slug) if rel != "." else slug]
+                            )
+            else:
+                for f in os.listdir(input_dir):
+                    if f.lower().endswith(
+                        (".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp")
+                    ):
+                        full = os.path.join(input_dir, f)
+                        stem = os.path.splitext(os.path.basename(full))[0]
+                        slug = rename_img.seo_friendly_name(stem)
+                        rows.append([full, slug])
+
+            with open(out_csv, "w", newline="", encoding="utf-8") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(["original_path", "proposed_name_or_relpath"])
+                writer.writerows(rows)
+
+            QMessageBox.information(
+                self, "Export Mapping", f"Saved mapping to:\n{out_csv}"
+            )
+
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+
+            QMessageBox.critical(self, "Export Mapping", f"Error: {e}")
 
 
 if __name__ == "__main__":

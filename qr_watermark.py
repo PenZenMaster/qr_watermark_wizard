@@ -22,21 +22,34 @@ Comments:
 - v1.07.15: Added SEO-friendly filename option.
 """
 
+from typing import Optional
 import os
 import qrcode
 import json
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from rename_img import seo_friendly_name
 
-def ensure_unique_path(path: str) -> str:
-    """If 'path' exists, append -2, -3, ... before the extension until it's unique."""
+def ensure_unique_path(path: str, strategy: str = "counter") -> str:
+    """
+    If 'path' exists, append -2, -3, ... (counter) or a -YYYYMMDDHHMMSS (timestamp).
+    """
     import os
+    import time
+    if not os.path.exists(path):
+        return path
     base, ext = os.path.splitext(path)
-    candidate = path
+    if strategy == "timestamp":
+        ts = time.strftime("%Y%m%d%H%M%S")
+        candidate = f"{base}-{ts}{ext}"
+        # If still collides, fall back to counter
+        if not os.path.exists(candidate):
+            return candidate
+    # counter fallback
     n = 2
+    candidate = f"{base}-{n}{ext}"
     while os.path.exists(candidate):
-        candidate = f"{base}-{n}{ext}"
         n += 1
+        candidate = f"{base}-{n}{ext}"
     return candidate
 
 
@@ -47,7 +60,7 @@ def load_config(path="config/settings.json"):  # noqa: C901
 
 
 def refresh_config(path="config/settings.json"):  # noqa: C901
-    global config, INPUT_DIR, OUTPUT_DIR, QR_LINK, QR_SIZE_RATIO, QR_OPACITY, TEXT_OVERLAY, TEXT_COLOR, SHADOW_COLOR, FONT_SIZE_RATIO, TEXT_PADDING_BOTTOM_RATIO, QR_PADDING_VH_RATIO, SEO_RENAME
+    global config, INPUT_DIR, OUTPUT_DIR, QR_LINK, QR_SIZE_RATIO, QR_OPACITY, TEXT_OVERLAY, TEXT_COLOR, SHADOW_COLOR, FONT_SIZE_RATIO, TEXT_PADDING_BOTTOM_RATIO, QR_PADDING_VH_RATIO, SEO_RENAME, COLLISION_STRATEGY, PROCESS_RECURSIVE, SLUG_MAX_WORDS, SLUG_MIN_LEN, SLUG_STOPWORDS, SLUG_WHITELIST, SLUG_PREFIX, SLUG_LOCATION
     config = load_config(path)
     INPUT_DIR = config["input_dir"]
     OUTPUT_DIR = config["output_dir"]
@@ -61,6 +74,27 @@ def refresh_config(path="config/settings.json"):  # noqa: C901
     TEXT_PADDING_BOTTOM_RATIO = config["text_padding_bottom_ratio"]
     QR_PADDING_VH_RATIO = config["qr_padding_vh_ratio"]
     SEO_RENAME = config.get("seo_rename", False)
+    COLLISION_STRATEGY = config.get("collision_strategy", "counter")
+    PROCESS_RECURSIVE = config.get("process_recursive", False)
+    SLUG_MAX_WORDS = int(config.get("slug_max_words", 6))
+    SLUG_MIN_LEN = int(config.get("slug_min_len", 3))
+    SLUG_STOPWORDS = config.get("slug_stopwords", [])
+    SLUG_WHITELIST = config.get("slug_whitelist", [])
+    SLUG_PREFIX = config.get("slug_prefix", "")
+    SLUG_LOCATION = config.get("slug_location", "")
+    # Apply slug configuration to rename_img
+    try:
+        import rename_img
+        rename_img.configure_slug(
+            max_words=SLUG_MAX_WORDS,
+            min_len=SLUG_MIN_LEN,
+            stopwords=SLUG_STOPWORDS,
+            whitelist=SLUG_WHITELIST,
+            prefix=SLUG_PREFIX,
+            location=SLUG_LOCATION,
+        )
+    except Exception as _cfg_err:
+        print(f"[WARN] Could not configure slug module: {_cfg_err}")
 
 
 # Load initial config
@@ -78,6 +112,28 @@ TEXT_PADDING_BOTTOM_RATIO = config["text_padding_bottom_ratio"]
 QR_PADDING_VH_RATIO = config["qr_padding_vh_ratio"]
 SEO_RENAME = config.get("seo_rename", False)
 
+# Additional runtime settings with defaults
+COLLISION_STRATEGY = config.get("collision_strategy", "counter")
+PROCESS_RECURSIVE = config.get("process_recursive", False)
+SLUG_MAX_WORDS = int(config.get("slug_max_words", 6))
+SLUG_MIN_LEN = int(config.get("slug_min_len", 3))
+SLUG_STOPWORDS = config.get("slug_stopwords", [])
+SLUG_WHITELIST = config.get("slug_whitelist", [])
+SLUG_PREFIX = config.get("slug_prefix", "")
+SLUG_LOCATION = config.get("slug_location", "")
+try:
+    import rename_img
+    rename_img.configure_slug(
+        max_words=SLUG_MAX_WORDS,
+        min_len=SLUG_MIN_LEN,
+        stopwords=SLUG_STOPWORDS,
+        whitelist=SLUG_WHITELIST,
+        prefix=SLUG_PREFIX,
+        location=SLUG_LOCATION,
+    )
+except Exception as _cfg_err:
+    print(f"[WARN] Could not configure slug module at import time: {_cfg_err}")
+
 
 def generate_qr_code(link, size):
     qr = qrcode.QRCode(box_size=10, border=1)
@@ -87,11 +143,14 @@ def generate_qr_code(link, size):
     return qr_img.resize(size, Image.Resampling.LANCZOS)
 
 
-def apply_watermark(image_path, return_image=False):  # noqa: C901
+def apply_watermark(image_path, return_image=False, out_dir: Optional[str] = None):  # noqa: C901
     # Ensure config is current
     refresh_config()
     try:
-        base_img = Image.open(image_path).convert("RGBA")
+        orig = Image.open(image_path)
+        exif_bytes = orig.info.get("exif")
+        icc_profile = orig.info.get("icc_profile")
+        base_img = orig.convert("RGBA")
         width, height = base_img.size
         # --- Generate QR Code ---
         qr_size = int(height * QR_SIZE_RATIO)
@@ -131,9 +190,16 @@ def apply_watermark(image_path, return_image=False):  # noqa: C901
         else:
             # Use original filename with .jpg extension
             output_filename = f"{base_filename}.jpg"
-        output_path = ensure_unique_path(os.path.join(OUTPUT_DIR, output_filename))
+        dest_dir = out_dir if out_dir else OUTPUT_DIR
+        os.makedirs(dest_dir, exist_ok=True)
+        output_path = ensure_unique_path(os.path.join(dest_dir, output_filename), strategy=COLLISION_STRATEGY)
 
-        base_img.convert("RGB").save(output_path, "JPEG")
+        save_kwargs = {"quality": 92, "optimize": True, "progressive": True}
+        if exif_bytes:
+            save_kwargs["exif"] = exif_bytes
+        if icc_profile:
+            save_kwargs["icc_profile"] = icc_profile
+        base_img.convert("RGB").save(output_path, "JPEG", **save_kwargs)
         print(f"[SUCCESS] Processed: {output_path}")
     except Exception as e:
         error_msg = f"[ERROR] Error processing {image_path}: {e}"

@@ -20,5 +20,13 @@
   "text_padding_bottom_ratio": 0.041666666666666664,
   "qr_padding_vh_ratio": 0.01574074074074074,
   "font_family": "Roboto",
-  "seo_rename": true
+  "seo_rename": true,
+  "process_recursive": false,
+  "collision_strategy": "counter",
+  "slug_max_words": 6,
+  "slug_min_len": 3,
+  "slug_stopwords": [],
+  "slug_whitelist": [],
+  "slug_prefix": "",
+  "slug_location": ""
 }
