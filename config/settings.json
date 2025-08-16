@@ -1,23 +1,24 @@
 {
   "input_dir": "E:/projects/qr_watermark_wizard/input_images",
   "output_dir": "E:/projects/qr_watermark_wizard/output_images",
-  "qr_link": "https://salvometalworks.com/product-category/custom-chimney-shrouds/",
+  "qr_link": "https://www.sharpofficeservices.com/",
   "qr_size_ratio": 0.15,
   "qr_opacity": 0.85,
-  "text_overlay": "Custom Chimney Shrouds\nSalvo Metal Works (866) 713-3396",
+  "text_overlay": "(866) 713-3396\nSalvo Metal Works\ninfo@salvometalworks.com\nForging Function with Metal Mastery",
   "text_color": [
     255,
-    255,
+    0,
     0
   ],
   "shadow_color": [
     0,
     0,
-    0,
+    127,
     128
   ],
-  "font_size_ratio": 0.05,
+  "font_size_ratio": 0.03333333333333333,
   "text_padding_bottom_ratio": 0.041666666666666664,
   "qr_padding_vh_ratio": 0.01574074074074074,
-  "font_family": "Bahnschrift"
+  "font_family": "Roboto",
+  "seo_rename": true
 }

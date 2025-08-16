@@ -15,16 +15,18 @@ Last Modified Date:
 08-01-2025
 
 Version:
-v1.07.14
+v1.07.15
 
 Comments:
 - v1.07.14: Fixed output file extensions - PNG inputs now properly save as .jpg files.
+- v1.07.15: Added SEO-friendly filename option.
 """
 
 import os
 import qrcode
 import json
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
+from rename_img import seo_friendly_name
 
 
 def load_config(path="config/settings.json"):  # noqa: C901
@@ -33,7 +35,7 @@ def load_config(path="config/settings.json"):  # noqa: C901
 
 
 def refresh_config(path="config/settings.json"):  # noqa: C901
-    global config, INPUT_DIR, OUTPUT_DIR, QR_LINK, QR_SIZE_RATIO, QR_OPACITY, TEXT_OVERLAY, TEXT_COLOR, SHADOW_COLOR, FONT_SIZE_RATIO, TEXT_PADDING_BOTTOM_RATIO, QR_PADDING_VH_RATIO
+    global config, INPUT_DIR, OUTPUT_DIR, QR_LINK, QR_SIZE_RATIO, QR_OPACITY, TEXT_OVERLAY, TEXT_COLOR, SHADOW_COLOR, FONT_SIZE_RATIO, TEXT_PADDING_BOTTOM_RATIO, QR_PADDING_VH_RATIO, SEO_RENAME
     config = load_config(path)
     INPUT_DIR = config["input_dir"]
     OUTPUT_DIR = config["output_dir"]
@@ -46,6 +48,7 @@ def refresh_config(path="config/settings.json"):  # noqa: C901
     FONT_SIZE_RATIO = config["font_size_ratio"]
     TEXT_PADDING_BOTTOM_RATIO = config["text_padding_bottom_ratio"]
     QR_PADDING_VH_RATIO = config["qr_padding_vh_ratio"]
+    SEO_RENAME = config.get("seo_rename", False)
 
 
 # Load initial config
@@ -61,6 +64,7 @@ SHADOW_COLOR = tuple(config["shadow_color"])
 FONT_SIZE_RATIO = config["font_size_ratio"]
 TEXT_PADDING_BOTTOM_RATIO = config["text_padding_bottom_ratio"]
 QR_PADDING_VH_RATIO = config["qr_padding_vh_ratio"]
+SEO_RENAME = config.get("seo_rename", False)
 
 
 def generate_qr_code(link, size):
@@ -107,9 +111,14 @@ def apply_watermark(image_path, return_image=False):  # noqa: C901
         # --- Save Output ---
         os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-        # Change extension to .jpg since we're saving as JPEG
+        # Generate output filename
         base_filename = os.path.splitext(os.path.basename(image_path))[0]
-        output_filename = f"{base_filename}.jpg"
+        if SEO_RENAME:
+            # Use SEO-friendly naming
+            output_filename = seo_friendly_name(base_filename)
+        else:
+            # Use original filename with .jpg extension
+            output_filename = f"{base_filename}.jpg"
         output_path = os.path.join(OUTPUT_DIR, output_filename)
 
         base_img.convert("RGB").save(output_path, "JPEG")

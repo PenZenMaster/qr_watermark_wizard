@@ -545,6 +545,9 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         # Set slider values
         self.ui.textPaddingSlider.setValue(text_px)
         self.ui.qrPaddingSlider.setValue(qr_px)
+        
+        # Load SEO rename setting
+        self.ui.seoRenameCheck.setChecked(cfg.get("seo_rename", False))
 
         # Update labels with current values
         if self.font_family_combo and self.font_size_combo:
@@ -838,6 +841,9 @@ class WatermarkWizard(QtWidgets.QMainWindow):
 
         qr_px = self.ui.qrPaddingSlider.value()
         self.config["qr_padding_vh_ratio"] = qr_px / 1080
+        
+        # Update SEO rename setting
+        self.config["seo_rename"] = self.ui.seoRenameCheck.isChecked()
 
     def add_tick_labels(self) -> None:
         """Add range indicators for remaining sliders (padding only - font size is now a combo)"""

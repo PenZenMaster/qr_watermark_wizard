@@ -149,6 +149,17 @@ class Ui_WatermarkWizard(object):
         self.formLayout.setWidget(
             8, QtWidgets.QFormLayout.ItemRole.FieldRole, self.shadowColorBtn
         )
+        # SEO rename checkbox row
+        self.labelSeoRename = QtWidgets.QLabel(parent=self.centralwidget)
+        self.labelSeoRename.setObjectName("labelSeoRename")
+        self.formLayout.setWidget(
+            9, QtWidgets.QFormLayout.ItemRole.LabelRole, self.labelSeoRename
+        )
+        self.seoRenameCheck = QtWidgets.QCheckBox(parent=self.centralwidget)
+        self.seoRenameCheck.setObjectName("seoRenameCheck")
+        self.formLayout.setWidget(
+            9, QtWidgets.QFormLayout.ItemRole.FieldRole, self.seoRenameCheck
+        )
         # Add form layout
         self.verticalLayout.addLayout(self.formLayout)
         # Preview and run buttons
@@ -185,5 +196,7 @@ class Ui_WatermarkWizard(object):
         self.textColorBtn.setText(_translate("WatermarkWizard", "Pick"))
         self.labelShadowColor.setText(_translate("WatermarkWizard", "Shadow Color"))
         self.shadowColorBtn.setText(_translate("WatermarkWizard", "Pick Shadow Color"))
+        self.labelSeoRename.setText(_translate("WatermarkWizard", "SEO Rename"))
+        self.seoRenameCheck.setText(_translate("WatermarkWizard", "Use SEO-friendly filenames"))
         self.previewBtn.setText(_translate("WatermarkWizard", "Preview"))
         self.runBtn.setText(_translate("WatermarkWizard", "Run Watermark"))
