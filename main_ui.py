@@ -16,7 +16,7 @@ Last Modified Date:
 08-01-2025
 
 Version:
-v1.07.31
+v1.07.33
 
 Comments:
 - v1.07.31: Fixed all Pylance errors including method definitions, syntax issues, and removed obsolete method references.
@@ -545,7 +545,7 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         # Set slider values
         self.ui.textPaddingSlider.setValue(text_px)
         self.ui.qrPaddingSlider.setValue(qr_px)
-        
+
         # Load SEO rename setting
         self.ui.seoRenameCheck.setChecked(cfg.get("seo_rename", False))
 
@@ -841,7 +841,7 @@ class WatermarkWizard(QtWidgets.QMainWindow):
 
         qr_px = self.ui.qrPaddingSlider.value()
         self.config["qr_padding_vh_ratio"] = qr_px / 1080
-        
+
         # Update SEO rename setting
         self.config["seo_rename"] = self.ui.seoRenameCheck.isChecked()
 

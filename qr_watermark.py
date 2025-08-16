@@ -28,6 +28,18 @@ import json
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from rename_img import seo_friendly_name
 
+def ensure_unique_path(path: str) -> str:
+    """If 'path' exists, append -2, -3, ... before the extension until it's unique."""
+    import os
+    base, ext = os.path.splitext(path)
+    candidate = path
+    n = 2
+    while os.path.exists(candidate):
+        candidate = f"{base}-{n}{ext}"
+        n += 1
+    return candidate
+
+
 
 def load_config(path="config/settings.json"):  # noqa: C901
     with open(path, "r", encoding="utf-8") as f:
@@ -119,7 +131,7 @@ def apply_watermark(image_path, return_image=False):  # noqa: C901
         else:
             # Use original filename with .jpg extension
             output_filename = f"{base_filename}.jpg"
-        output_path = os.path.join(OUTPUT_DIR, output_filename)
+        output_path = ensure_unique_path(os.path.join(OUTPUT_DIR, output_filename))
 
         base_img.convert("RGB").save(output_path, "JPEG")
         print(f"[SUCCESS] Processed: {output_path}")
