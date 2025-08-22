@@ -29,6 +29,9 @@ desktop.ini
 .idea/
 *.code-workspace
 
+# === CLAUDE CODE LOCAL SETTINGS ===
+.claude/settings.local.json
+
 # === LOG FILES ===
 *.log
 *.gz
