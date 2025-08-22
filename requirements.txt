@@ -1,3 +1,9 @@
 PyQt6>=6.5.0
 Pillow>=9.0.0
 qrcode>=7.3.1
+
+# Development and Quality Gate Tools
+ruff>=0.1.0
+black>=23.0.0
+mypy>=1.5.0
+pytest>=7.0.0

@@ -1,0 +1,13 @@
+# Development Dependencies for QR Watermark Wizard
+# Install with: pip install -r requirements-dev.txt
+
+# Code Quality and Linting
+ruff>=0.1.0              # Fast Python linter and formatter
+black>=23.0.0            # Code formatter
+mypy>=1.5.0              # Static type checker
+pytest>=7.0.0            # Testing framework
+
+# Development Tools (Optional)
+pre-commit>=3.0.0        # Git hooks for quality gates
+flake8>=6.0.0            # Alternative linter
+coverage>=7.0.0          # Code coverage analysis

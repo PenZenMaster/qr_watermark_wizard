@@ -25,7 +25,6 @@ Comments:
 import sys
 import os
 import json
-import subprocess
 import io
 from typing import Optional, cast, Any
 from PyQt6 import QtWidgets
@@ -36,21 +35,15 @@ from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QLabel,
-    QHBoxLayout,
-    QPushButton,
     QProgressDialog,
     QSlider,
     QWidget,
-    QLayout,
     QComboBox,
     QFontComboBox,
-    QTableWidget,
-    QTableWidgetItem,
-    QCheckBox,
     QPushButton,
     QHBoxLayout,
 )
-from PyQt6.QtGui import QColor, QPixmap, QFont
+from PyQt6.QtGui import QPixmap, QFont
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PIL import Image
 from PIL.ImageQt import ImageQt
@@ -919,8 +912,6 @@ class WatermarkWizard(QtWidgets.QMainWindow):
                 QPushButton,
                 QComboBox,
                 QBoxLayout,
-                QGridLayout,
-                QFormLayout,
             )
 
             host = self.ui.runBtn.parentWidget()
@@ -981,7 +972,8 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         try:
             self.update_config_from_ui()
             save_config(self.config)
-            import os, rename_img
+            import os
+            import rename_img
             from PyQt6.QtWidgets import (
                 QDialog,
                 QVBoxLayout,
@@ -1041,40 +1033,43 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             table.setHorizontalHeaderLabels(
                 ["Original", "Actual Output Name", "Relative Folder"]
             )
-            
+
             # Track used names to simulate collision resolution
             used_names = set()
             output_dir = self.config.get("output_dir", "")
             collision_strategy = self.config.get("collision_strategy", "counter")
-            
+
             for r, full in enumerate(paths):
                 stem = os.path.splitext(os.path.basename(full))[0]
                 rel = os.path.relpath(os.path.dirname(full), input_dir)
-                
+
                 # Generate base SEO name
                 base_seo_name = rename_img.seo_friendly_name(stem)
-                
+
                 # Determine output directory for this file
                 if self.config.get("process_recursive", False) and rel != ".":
                     file_output_dir = os.path.join(output_dir, rel)
                 else:
                     file_output_dir = output_dir
-                
+
                 # Simulate collision resolution
                 full_path = os.path.join(file_output_dir, base_seo_name)
                 import qr_watermark
-                actual_path = qr_watermark.ensure_unique_path(full_path, strategy=collision_strategy)
+
+                actual_path = qr_watermark.ensure_unique_path(
+                    full_path, strategy=collision_strategy
+                )
                 actual_name = os.path.basename(actual_path)
-                
+
                 # Also check against our preview tracking for duplicates within this preview
                 counter = 2
                 while actual_name in used_names:
                     base, ext = os.path.splitext(base_seo_name)
                     actual_name = f"{base}-{counter}{ext}"
                     counter += 1
-                
+
                 used_names.add(actual_name)
-                
+
                 table.setItem(r, 0, QTableWidgetItem(os.path.basename(full)))
                 table.setItem(r, 1, QTableWidgetItem(actual_name))
                 table.setItem(r, 2, QTableWidgetItem("" if rel == "." else rel))
@@ -1104,7 +1099,9 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         try:
             self.update_config_from_ui()
             save_config(self.config)
-            import os, csv, rename_img
+            import os
+            import csv
+            import rename_img
             from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
             # Configure slug per current settings

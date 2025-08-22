@@ -20,7 +20,7 @@ v1.06
 Comments:
 - v1.06: Moved "Pick Shadow Color" button under "Pick Text Color" and added "Preview" button above Run.
 """
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtCore, QtWidgets
 
 
 class Ui_WatermarkWizard(object):
@@ -197,6 +197,8 @@ class Ui_WatermarkWizard(object):
         self.labelShadowColor.setText(_translate("WatermarkWizard", "Shadow Color"))
         self.shadowColorBtn.setText(_translate("WatermarkWizard", "Pick Shadow Color"))
         self.labelSeoRename.setText(_translate("WatermarkWizard", "SEO Rename"))
-        self.seoRenameCheck.setText(_translate("WatermarkWizard", "Use SEO-friendly filenames"))
+        self.seoRenameCheck.setText(
+            _translate("WatermarkWizard", "Use SEO-friendly filenames")
+        )
         self.previewBtn.setText(_translate("WatermarkWizard", "Preview"))
         self.runBtn.setText(_translate("WatermarkWizard", "Run Watermark"))

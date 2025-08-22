@@ -26,8 +26,9 @@ from typing import Optional
 import os
 import qrcode
 import json
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance
+from PIL import Image, ImageDraw, ImageFont
 from rename_img import seo_friendly_name
+
 
 def ensure_unique_path(path: str, strategy: str = "counter") -> str:
     """
@@ -35,6 +36,7 @@ def ensure_unique_path(path: str, strategy: str = "counter") -> str:
     """
     import os
     import time
+
     if not os.path.exists(path):
         return path
     base, ext = os.path.splitext(path)
@@ -51,7 +53,6 @@ def ensure_unique_path(path: str, strategy: str = "counter") -> str:
         n += 1
         candidate = f"{base}-{n}{ext}"
     return candidate
-
 
 
 def load_config(path="config/settings.json"):  # noqa: C901
@@ -85,6 +86,7 @@ def refresh_config(path="config/settings.json"):  # noqa: C901
     # Apply slug configuration to rename_img
     try:
         import rename_img
+
         rename_img.configure_slug(
             max_words=SLUG_MAX_WORDS,
             min_len=SLUG_MIN_LEN,
@@ -123,6 +125,7 @@ SLUG_PREFIX = config.get("slug_prefix", "")
 SLUG_LOCATION = config.get("slug_location", "")
 try:
     import rename_img
+
     rename_img.configure_slug(
         max_words=SLUG_MAX_WORDS,
         min_len=SLUG_MIN_LEN,
@@ -143,7 +146,9 @@ def generate_qr_code(link, size):
     return qr_img.resize(size, Image.Resampling.LANCZOS)
 
 
-def apply_watermark(image_path, return_image=False, out_dir: Optional[str] = None):  # noqa: C901
+def apply_watermark(
+    image_path, return_image=False, out_dir: Optional[str] = None
+):  # noqa: C901
     # Ensure config is current
     refresh_config()
     try:
@@ -192,7 +197,9 @@ def apply_watermark(image_path, return_image=False, out_dir: Optional[str] = Non
             output_filename = f"{base_filename}.jpg"
         dest_dir = out_dir if out_dir else OUTPUT_DIR
         os.makedirs(dest_dir, exist_ok=True)
-        output_path = ensure_unique_path(os.path.join(dest_dir, output_filename), strategy=COLLISION_STRATEGY)
+        output_path = ensure_unique_path(
+            os.path.join(dest_dir, output_filename), strategy=COLLISION_STRATEGY
+        )
 
         save_kwargs = {"quality": 92, "optimize": True, "progressive": True}
         if exif_bytes:
@@ -214,7 +221,7 @@ def main():
         processed_count = 0
         error_count = 0
 
-        print(f"Starting watermark processing...")
+        print("Starting watermark processing...")
         print(f"Input directory: {INPUT_DIR}")
         print(f"Output directory: {OUTPUT_DIR}")
 
@@ -227,7 +234,7 @@ def main():
                     error_count += 1
                     print(f"[ERROR] Failed to process {filename}: {e}")
 
-        print(f"\nProcessing complete!")
+        print("\nProcessing complete!")
         print(f"Successfully processed: {processed_count} images")
         if error_count > 0:
             print(f"Errors encountered: {error_count} images")
