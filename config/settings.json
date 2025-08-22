@@ -7,13 +7,13 @@
   "text_overlay": "(866) 713-3396\nSalvo Metal Works\ninfo@salvometalworks.com\nForging Function with Metal Mastery",
   "text_color": [
     255,
-    0,
-    0
+    255,
+    255
   ],
   "shadow_color": [
     0,
     0,
-    127,
+    0,
     128
   ],
   "font_size_ratio": 0.03333333333333333,
@@ -23,10 +23,37 @@
   "seo_rename": true,
   "process_recursive": false,
   "collision_strategy": "counter",
-  "slug_max_words": 6,
-  "slug_min_len": 3,
-  "slug_stopwords": [],
-  "slug_whitelist": [],
-  "slug_prefix": "",
-  "slug_location": ""
+  "slug_max_words": 4,
+  "slug_min_len": 4,
+  "slug_stopwords": [
+    "simple",
+    "compose",
+    "remix",
+    "beauty",
+    "installation",
+    "penzenmaster"
+  ],
+  "slug_whitelist": [
+    "copper",
+    "dormer",
+    "finial",
+    "chimney",
+    "shroud",
+    "custom",
+    "historic",
+    "home",
+    "homes",
+    "chicago",
+    "york",
+    "city",
+    "lake",
+    "front",
+    "collection",
+    "light",
+    "cupola",
+    "vane",
+    "weather"
+  ],
+  "slug_prefix": "salvo",
+  "slug_location": "chicago"
 }
