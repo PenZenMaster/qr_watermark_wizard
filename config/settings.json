@@ -1,7 +1,7 @@
 {
   "input_dir": "E:/projects/qr_watermark_wizard/input_images",
   "output_dir": "E:/projects/qr_watermark_wizard/output_images",
-  "qr_link": "https://www.sharpofficeservices.com/",
+  "qr_link": "https://salvometalworks.com/product-category/custom-dormers/",
   "qr_size_ratio": 0.15,
   "qr_opacity": 0.85,
   "text_overlay": "(866) 713-3396\nSalvo Metal Works\ninfo@salvometalworks.com\nForging Function with Metal Mastery",
