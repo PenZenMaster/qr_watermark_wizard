@@ -1,6 +1,6 @@
-# Claude Code – Project Playbook: QRMR-Project-Plan
+# Claude Code – QR Watermark Wizard Playbook
 
-> Repo nickname: **QRMR** · Purpose: Execute the QRMR Project Plan (city/service cloud stacks + static site generator) with reliable session handoffs and checkpoints.
+> Project: **QR Watermark Wizard** · Purpose: Professional PyQt6 application for AI image generation, QR code watermarking, and SEO-friendly filename optimization with reliable session handoffs and checkpoints.
 
 ---
 
@@ -77,23 +77,37 @@ When asked for changes in this repo:
 
 ---
 
-## 2) Project Guardrails (QRMR specifics)
+## 2) Project Guardrails (QR Watermark Wizard specifics)
 
-* **Stack**: Python 3.9+, Jinja2, YAML configs; optional PyQt6 UI; AWS S3 deploy via Boto3 (if used).
-* **Generator**: City pages (800–1,200 words), schema, internal links; service/products hubs; navigation that scales to many cities.
-* **WYSIWYG truth**: If a UI is present, generation must reflect **current UI state**.
-* **Idempotency**: Safe reruns (dedupe by slug/ID, skip already‑processed).
-* **Performance**: Keep templates lean; avoid blocking calls; stream large I/O.
+* **Core Stack**: Python 3.9+, PyQt6, PIL/Pillow, qrcode library
+* **AI Integration**: OpenAI API, Claude MCP, aiohttp for async API calls
+* **Architecture**: Main UI (`main_ui.py`) + Watermark Engine (`qr_watermark.py`) + SEO Slug Generator (`rename_img.py`)
+* **Workflow**: AI Image Generation → Preview/Review → Accept → QR Watermarking → SEO Renaming
+* **Configuration**: JSON-based settings with client-specific watermark templates
+* **Threading**: QThread for async processing (UI responsiveness during batch operations)
+* **File Handling**: Collision detection, recursive folder processing, multiple image formats
 
 ---
 
 ## 3) Files & Paths (authoritative)
 
-* **Plan**: `docs/QRMR-Project-Plan.md` (source of truth + Design Variations section)
-* **Status**: `docs/projectStatus.md` (sprint state + next actions)
-* **Checkpoints**: `docs/archive/checkpoints/` (one markdown per checkpoint)
+**Core Application:**
+* **Main UI**: `main_ui.py` (PyQt6 WatermarkWizard class)
+* **Watermark Engine**: `qr_watermark.py` (PIL-based processing)
+* **SEO Slug Generator**: `rename_img.py` (filename optimization)
+* **UI Definitions**: `ui/designer_ui.py` (Qt Designer output)
+* **Configuration**: `config/settings.json` (runtime settings)
 
-> If these files/folders don’t exist, Claude should create them with minimal scaffolding.
+**Documentation & Management:**
+* **Project Plan**: `docs/QRMR-Project-Plan.md` (architecture + enhancement roadmap)
+* **Status**: `docs/projectStatus.md` (current sprint state)
+* **Checkpoints**: `docs/archive/checkpoints/` (session history)
+
+**Processing Folders:**
+* **Input Images**: `input_images/` (source images for watermarking)
+* **Output Images**: `output_images/` (processed watermarked images)
+
+> If these files/folders don't exist, Claude should create them with minimal scaffolding.
 
 ---
 
@@ -110,17 +124,12 @@ ruff --fix . && black . && mypy . && pytest -q
 * CLIs default to safe behavior (dry‑run when destructive).
 * `pathlib` for filesystem ops; write OS‑portable code.
 
-### WordPress/PHP (if present)
+### PyQt6 UI Standards
 
-```bash
-phpcs --standard=phpcs.xml.dist
-```
-
-* Sanitize inputs, escape outputs, nonce + capability checks; i18n wrappers.
-
-### Frontend
-
-* Accessible markup; non‑blocking scripts; defer where possible.
+* Proper type annotations for all Qt components
+* Thread safety: UI updates only on main thread
+* Resource management: proper cleanup of QPixmap and PIL Image objects
+* Accessibility: keyboard navigation and screen reader support
 
 ---
 
@@ -128,8 +137,12 @@ phpcs --standard=phpcs.xml.dist
 
 Before tagging a release:
 
-* Remove debug prints and traces from Python/JS/HTML generators.
-* Re‑run quality gate and a smoke build; verify output site loads with correct interlinks.
+* Remove debug prints and traces from Python modules
+* Test full workflow: Generate images → Preview → Watermark → Export
+* Verify UI responsiveness during batch processing
+* Test with different image formats (JPG, PNG, WEBP)
+* Validate SEO slug generation with various filename patterns
+* Check client configuration templates (Salvo Metal Works, etc.)
 
 ---
 
@@ -167,15 +180,26 @@ DELETE RULE → <Section Anchor>
 
 ## 7) Quick Prompts
 
-* **Start session**: `QRMR start`
-* **Checkpoint now**: `QRMR checkpoint — summarize, commit, push`
-* **End session**: `QRMR shutdown`
+* **Start session**: `QRMR start` (load plan, status, last checkpoint)
+* **Checkpoint now**: `QRMR checkpoint` (save state, commit, push)
+* **End session**: `QRMR shutdown` (mandatory checkpoint + 3 next steps)
+* **Test quality**: `ruff --fix . && black . && mypy . && pytest -q`
 * **Override rule**: `EDIT RULE → 4) Code Quality Gates …`
 
 ---
 
 ## 8) Notes on Continuity & Limits
 
-* Use **QRMR checkpoint** whenever you’re nearing your daily usage cap or switching tasks.
+* Use **QRMR checkpoint** whenever you're nearing your daily usage cap or switching tasks.
 * A checkpoint is **mandatory** for every **QRMR shutdown**.
 * Next session resumes with **QRMR start** which reads the last checkpoint and aligns the plan.
+
+---
+
+## 9) Current Version Status
+
+* **UI Version**: v1.07.31 (main_ui.py)
+* **Engine Version**: v1.07.15 (qr_watermark.py) 
+* **Architecture**: Production-ready PyQt6 application
+* **Active Client**: Salvo Metal Works (copper dormer specialist)
+* **Next Major Feature**: AI Image Generation Integration (Priority 1)
