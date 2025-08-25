@@ -154,6 +154,10 @@ class WatermarkWizard(QtWidgets.QMainWindow):
     collisionCombo: Optional[Any]
     previewSeoBtn: Optional[Any]
     exportMapBtn: Optional[Any]
+    slugPrefixLabel: Optional[Any]
+    slugPrefixEdit: Optional[Any]
+    slugLocationLabel: Optional[Any]
+    slugLocationEdit: Optional[Any]
 
     def __init__(self) -> None:
         super().__init__()
@@ -884,13 +888,25 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         collision_combo = getattr(self, "collisionCombo", None)
         if collision_combo:
             self.config["collision_strategy"] = collision_combo.currentText()
+        
+        # Slug prefix and location from UI fields
+        slug_prefix_edit = getattr(self, "slugPrefixEdit", None)
+        if slug_prefix_edit:
+            self.config["slug_prefix"] = slug_prefix_edit.text().strip()
+        else:
+            self.config.setdefault("slug_prefix", "")
+            
+        slug_location_edit = getattr(self, "slugLocationEdit", None)
+        if slug_location_edit:
+            self.config["slug_location"] = slug_location_edit.text().strip()
+        else:
+            self.config.setdefault("slug_location", "")
+        
         # Optional advanced fields (keep if already present)
         self.config.setdefault("slug_max_words", 6)
         self.config.setdefault("slug_min_len", 3)
         self.config.setdefault("slug_stopwords", [])
         self.config.setdefault("slug_whitelist", [])
-        self.config.setdefault("slug_prefix", "")
-        self.config.setdefault("slug_location", "")
 
     def add_tick_labels(self) -> None:
         """Clean up any existing tick labels (range indicators removed to prevent UI artifacts)"""
@@ -912,6 +928,8 @@ class WatermarkWizard(QtWidgets.QMainWindow):
                 QPushButton,
                 QComboBox,
                 QBoxLayout,
+                QLineEdit,
+                QLabel,
             )
 
             host = self.ui.runBtn.parentWidget()
@@ -932,6 +950,17 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             idx = self.collisionCombo.findText(current) if current else 0
             self.collisionCombo.setCurrentIndex(idx if idx >= 0 else 0)
 
+            # Slug prefix and location controls
+            self.slugPrefixLabel = QLabel("Slug Prefix:", host)
+            self.slugPrefixEdit = QLineEdit(host)
+            self.slugPrefixEdit.setText(self.config.get("slug_prefix", ""))
+            self.slugPrefixEdit.setPlaceholderText("e.g., salvo, company")
+            
+            self.slugLocationLabel = QLabel("Slug Location:", host)
+            self.slugLocationEdit = QLineEdit(host)
+            self.slugLocationEdit.setText(self.config.get("slug_location", ""))
+            self.slugLocationEdit.setPlaceholderText("e.g., chicago, newyork")
+
             self.previewSeoBtn = QPushButton("Preview SEO Names", host)
             self.exportMapBtn = QPushButton("Export Mapping CSV", host)
 
@@ -945,13 +974,21 @@ class WatermarkWizard(QtWidgets.QMainWindow):
                         break
                 if run_index is None:
                     run_index = layout.count()
-                layout.insertWidget(run_index, self.previewSeoBtn)
-                layout.insertWidget(run_index + 1, self.exportMapBtn)
-                layout.insertWidget(run_index + 2, self.collisionCombo)
-                layout.insertWidget(run_index + 3, self.recursiveCheck)
+                layout.insertWidget(run_index, self.slugPrefixLabel)
+                layout.insertWidget(run_index + 1, self.slugPrefixEdit)
+                layout.insertWidget(run_index + 2, self.slugLocationLabel)
+                layout.insertWidget(run_index + 3, self.slugLocationEdit)
+                layout.insertWidget(run_index + 4, self.previewSeoBtn)
+                layout.insertWidget(run_index + 5, self.exportMapBtn)
+                layout.insertWidget(run_index + 6, self.collisionCombo)
+                layout.insertWidget(run_index + 7, self.recursiveCheck)
             else:
                 # Generic layouts (QGridLayout/QFormLayout/unknown): just append
                 for w in (
+                    self.slugPrefixLabel,
+                    self.slugPrefixEdit,
+                    self.slugLocationLabel,
+                    self.slugLocationEdit,
                     self.previewSeoBtn,
                     self.exportMapBtn,
                     self.collisionCombo,
