@@ -954,12 +954,12 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             self.slugPrefixLabel = QLabel("Slug Prefix:", host)
             self.slugPrefixEdit = QLineEdit(host)
             self.slugPrefixEdit.setText(self.config.get("slug_prefix", ""))
-            self.slugPrefixEdit.setPlaceholderText("e.g., salvo, company")
+            self.slugPrefixEdit.setPlaceholderText("e.g., send-out-cards, company-name")
             
             self.slugLocationLabel = QLabel("Slug Location:", host)
             self.slugLocationEdit = QLineEdit(host)
             self.slugLocationEdit.setText(self.config.get("slug_location", ""))
-            self.slugLocationEdit.setPlaceholderText("e.g., chicago, newyork")
+            self.slugLocationEdit.setPlaceholderText("e.g., ann-arbor, new-york-city")
 
             self.previewSeoBtn = QPushButton("Preview SEO Names", host)
             self.exportMapBtn = QPushButton("Export Mapping CSV", host)
