@@ -1,16 +1,17 @@
 # QR Watermark Wizard - Session Context
 
-**Last Updated**: 2025-12-24 (from checkpoint 2025-08-25_1918)
-**Branch**: main
-**Last Commit**: 0ab7b8c - chore(checkpoint): 2025-08-25_1918 – slug fields implementation complete
+**Last Updated**: 2025-12-24
+**Branch**: ai-image-generation
+**Version**: v2.0.0
+**Last Commit**: 2eba47c - test: add comprehensive unit testing framework
 
 ---
 
 ## Last 3 Accomplishments
 
-- Editable slug_prefix and slug_location UI fields implementation complete
-- Settings persistence workflow fully integrated (UI <-> settings.json)
-- Enhanced UX with multipart name support (e.g., "ann-arbor", "send-out-cards")
+- Comprehensive unit testing framework implemented (105 tests, all passing)
+- Lean startup improvements from cloud-stack-generator integrated
+- Version bumped to 2.0.0 and ai-image-generation branch created
 
 ---
 
@@ -24,20 +25,20 @@
 
 ## Current State
 
-**Git Status**: Clean working tree, all changes committed and pushed
-**Tests**: All syntax validation and functionality tests passed
-**Blockers**: None - feature working correctly in production state
+**Git Status**: On branch ai-image-generation
+**Tests**: 105 unit tests passing (pytest framework)
+**Blockers**: None - ready for AI feature development
 
 ---
 
 ## Key Context Notes
 
-- Current UI version: v1.07.31 (main_ui.py)
-- Current engine version: v1.07.15 (qr_watermark.py)
+- Current version: v2.0.0 (semantic versioning active)
 - Active client: Salvo Metal Works (copper dormer specialist)
-- Architecture: Production-ready PyQt6 application
-- Next major feature: AI Image Generation Integration (6-week roadmap)
-- Settings values auto-sync between UI and config/settings.json
+- Architecture: Production-ready PyQt6 application with test coverage
+- Current focus: AI Image Generation Integration (v2.x development)
+- Test framework: pytest with 105 passing tests
+- Settings values auto-sync between UI and config/settings.json (now gitignored)
 - Multipart names supported via hyphenated slugs
 
 ---

@@ -1,9 +1,9 @@
 # 🧠 QR Watermark Wizard – Project Enhancement Plan
 
-**Author:** George Penzenik – Rank Rocket Co  
-**Version:** v1.07.31 (UI) / v1.07.15 (Engine)  
-**Updated:** 2025-08-25  
-**Status:** Production Ready → Enhancement Phase
+**Author:** George Penzenik – Rank Rocket Co
+**Version:** v2.0.0 (Application-wide - Semantic Versioning)
+**Updated:** 2025-12-24
+**Status:** Development Branch - AI Image Generation Feature
 
 ---
 

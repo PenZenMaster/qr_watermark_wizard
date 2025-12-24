@@ -15,11 +15,12 @@ Last Modified Date:
 08-01-2025
 
 Version:
-v1.07.15
+v2.0.0
 
 Comments:
-- v1.07.14: Fixed output file extensions - PNG inputs now properly save as .jpg files.
+- v2.0.0: Major version bump for AI image generation feature development. Added comprehensive unit testing framework.
 - v1.07.15: Added SEO-friendly filename option.
+- v1.07.14: Fixed output file extensions - PNG inputs now properly save as .jpg files.
 """
 
 from typing import Optional
