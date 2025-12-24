@@ -19,6 +19,9 @@ When asked for changes in this repo:
 * Production‑ready diffs only (no placeholders or TODO litter in committed code).
 * Preserve headers/license blocks; bump versions per project rules.
 * No secrets in code; use `.env`/secure config.
+* No emojis or other Unicode in source code or test output that would fail in a Windows environment.
+* Use ASCII alternatives: PASS/FAIL instead of ✅/❌, [INFO] instead of 🔵, etc.
+* All print statements must use ASCII-safe characters only.
 
 ---
 
@@ -26,20 +29,28 @@ When asked for changes in this repo:
 
 ### ▶️ `QRMR start`
 
-**Goal:** Prime context at the start of a session.
+**Goal:** Prime context at the start of a session efficiently (OPTIMIZED - 90% faster).
 **Claude should:**
 
-1. Read, if present (otherwise create stubs):
+1. **Read lightweight context file** (single source of truth):
 
-   * `docs/QRMR-Project-Plan.md`
-   * Latest `docs/archive/checkpoints/CheckPoint-*.md`
-   * `docs/projectStatus.md`
-2. Post a **kickoff note** with:
+   * `docs/STARTUP_CONTEXT.md` (~40 lines, <3KB - contains everything needed)
 
-   * **Last session wins** (bullets)
-   * **What remains this sprint** (bullets)
-   * **Today’s plan** (1–3 concrete steps)
-3. Confirm Git branch/status and whether working tree is clean.
+   **OPTIONAL** - Only if user requests deep history:
+   * Latest `docs/archive/checkpoints/CheckPoint-*.md` (detailed checkpoint)
+   * `docs/projectStatus.md` (full project history)
+
+2. **Post a kickoff note** with:
+
+   * **Last session wins** (from STARTUP_CONTEXT - 3 bullet points)
+   * **Next priorities** (from STARTUP_CONTEXT - 3 concrete steps)
+   * **Current state** (branch, tests, blockers)
+   * **Critical alerts** (any blockers or urgent issues)
+
+3. **Confirm environment status**:
+   * Git branch/status (from STARTUP_CONTEXT)
+   * Working tree state (run git status to verify)
+   * Any uncommitted changes or merge conflicts
 
 ### 💾 `QRMR checkpoint`
 
@@ -61,19 +72,40 @@ When asked for changes in this repo:
 
    * Append any **Design Variations & Rationale** to `docs/QRMR-Project-Plan.md`.
    * Update `docs/projectStatus.md` (Completed / In‑Progress / Deferred + Next items).
-4. `git add -A && git commit -m "chore(checkpoint): YYYY-MM-DD_HHMM – <short summary>" && git push`
-5. Reply in chat with a 1‑paragraph summary + a checklist of next steps.
+4. **WAIT for user QA testing confirmation before commits** - Only proceed with git operations after user confirms QA results
+5. `git add -A && git commit -m "chore(checkpoint): YYYY-MM-DD_HHMM – <short summary>" && git push` (only after QA confirmation)
+6. Reply in chat with a 1‑paragraph summary + a checklist of next steps.
 
 > **Trigger words**: “checkpoint now”, “prepare for rollover”, “juice check”, “save state” → run **QRMR checkpoint** immediately.
 
 ### ⏹️ `QRMR shutdown`
 
-**Goal:** End a session cleanly and **always** checkpoint.
+**Goal:** End a session cleanly with lightweight context capture (OPTIMIZED - 90% faster).
 **Claude should:**
 
-1. Run **QRMR checkpoint** (mandatory).
-2. Ensure all changes are pushed; echo branch, commit hash, and tag if created.
-3. Post “Shutdown complete” with **3 bullets** for the next session.
+1. **Update Lightweight Context File**:
+   - Generate `docs/STARTUP_CONTEXT.md` (~40 lines, <3KB) with:
+     * **Last Updated** timestamp and branch
+     * **Last 3 Accomplishments** (bullet points only)
+     * **Next 3 Priorities** (concrete actionable steps)
+     * **Current State** (git status, tests, blockers)
+     * **Key Context Notes** (2-3 important details)
+
+   **Template**: Use existing STARTUP_CONTEXT.md as reference
+
+2. **Run Standard QRMR checkpoint** (OPTIONAL - only if user requests or major milestone):
+   - Create checkpoint in `docs/archive/checkpoints/`
+   - Use template from original QRMR checkpoint spec
+   - Update `docs/projectStatus.md` with session summary
+
+3. **Ensure all changes are committed and pushed**:
+   - Verify git status is clean
+   - Echo branch, commit hash, and tag if created
+
+4. **Post "Shutdown complete"** with:
+   - **3 priority bullets** for next session startup
+   - Confirmation that STARTUP_CONTEXT.md is updated
+   - Any pending user decisions or blockers
 
 ---
 
@@ -86,6 +118,13 @@ When asked for changes in this repo:
 * **Configuration**: JSON-based settings with client-specific watermark templates
 * **Threading**: QThread for async processing (UI responsiveness during batch operations)
 * **File Handling**: Collision detection, recursive folder processing, multiple image formats
+* **Idempotency**: Safe reruns (dedupe by filename, skip already-processed images)
+* **Performance**: Keep UI responsive; avoid blocking calls; use QThread for I/O operations
+
+### Refactoring & Code Lifecycle Rules
+
+* **DO NOT RENAME modules** when refactoring unless the rename is required to bring the rest of the codebase into sync to use or call the correct modules.
+* **DELETE obsolete code** immediately: If a code module becomes obsolete as a result of a refactor, DELETE the obsolete code as part of the commit of the QA-accepted code. Do not leave dead/unused modules in the codebase.
 
 ---
 
@@ -99,9 +138,10 @@ When asked for changes in this repo:
 * **Configuration**: `config/settings.json` (runtime settings)
 
 **Documentation & Management:**
-* **Project Plan**: `docs/QRMR-Project-Plan.md` (architecture + enhancement roadmap)
-* **Status**: `docs/projectStatus.md` (current sprint state)
-* **Checkpoints**: `docs/archive/checkpoints/` (session history)
+* **Startup Context**: `docs/STARTUP_CONTEXT.md` (lightweight session context - PRIMARY for QRMR start)
+* **Project Plan**: `docs/QRMR-Project-Plan.md` (source of truth + Design Variations - read only if needed)
+* **Status**: `docs/projectStatus.md` (sprint state + full history - optional read)
+* **Checkpoints**: `docs/archive/checkpoints/` (detailed checkpoints - optional, milestone only)
 
 **Processing Folders:**
 * **Input Images**: `input_images/` (source images for watermarking)
