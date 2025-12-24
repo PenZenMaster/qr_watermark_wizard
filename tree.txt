@@ -1,38 +1,44 @@
 Folder PATH listing for volume TOSHIBA EXT
 Volume serial number is B0D0-A4E4
 E:.
-�   .gitignore
-�   .gitingnore
-�   launch_designer.bat
-�   PlayfairDisplay-Regular.ttf
-�   qr_watermark.py
-�   tree.txt
-�   
-����config
-�       settings.json
-�       
-����input_images
-�       rename_images.bat
-�       SalvoMetalWorksCustomChimneyShrouds_02.webp
-�       SalvoMetalWorksCustomChimneyShroud_01.webp
-�       SalvoMetalWorksCustomChimneyShroud_02.jpg
-�       SalvoMetalWorksCustomChimneyShroud_03.jpg
-�       SalvoMetalWorksCustomChimneyShroud_04.jpg
-�       SalvoMetalWorksCustomChimneyShroud_05.jpg
-�       SalvoMetalWorksCustomChimneyShroud_06.jpg
-�       SalvoMetalWorksCustomChimneyShroud_07.jpg
-�       
-����output_images
-�       DSC09196.jpeg
-�       SalvoMetalWorksCustomChimneyShrouds_02.webp
-�       SalvoMetalWorksCustomChimneyShroud_01.webp
-�       SalvoMetalWorksCustomChimneyShroud_02.jpg
-�       SalvoMetalWorksCustomChimneyShroud_03.jpg
-�       SalvoMetalWorksCustomChimneyShroud_04.jpg
-�       SalvoMetalWorksCustomChimneyShroud_05.jpg
-�       SalvoMetalWorksCustomChimneyShroud_06.jpg
-�       SalvoMetalWorksCustomChimneyShroud_07.jpg
-�       
-����ui
-        designer.ui
-        
+│   .gitignore
+│   launch_designer.bat
+│   PlayfairDisplay-Regular.ttf
+│   main_ui.py
+│   qr_watermark.py
+│   rename_img.py
+│   pipeline_runner.py
+│   tree.txt
+│
+├── config
+│   ├── profiles
+│   │   ├── salvo_metal_works.yaml
+│   │   └── easy_dumpster_tampa.yaml
+│   ├── app_settings.json
+│   └── providers.yaml
+│
+├── input_images
+│   └── (user-selected at runtime; optional default folder)
+│
+├── generated_images
+│   └── (user-selected at runtime; optional default folder)
+│
+├── output_images
+│   └── (user-selected at runtime; optional default folder)
+│
+├── logs
+│   └── qrmr.log
+│
+├── ui
+│   └── designer.ui
+│
+└── qrmr
+    ├── __init__.py
+    ├── config_schema.py
+    ├── config_store.py
+    ├── image_generation.py
+    ├── provider_adapters.py
+    ├── quality_control.py
+    ├── uploader_s3.py
+    ├── watch_folder.py
+    └── utils.py

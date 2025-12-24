@@ -141,86 +141,30 @@ flowchart TD
 - **UI Extension**: Add "Generate Images" tab to existing `WatermarkWizard` window
 - **Thread Integration**: Use existing `QThread` pattern for async API calls
 
-### 🎯 Priority 2: Core Engine Improvements
-- **Multi-format Output Support**: Add PNG/WEBP output options (currently JPG only)
-- **Watermark Templates**: Save/load watermark configurations for different clients
-- **Advanced Positioning**: Custom QR/text positioning (not just upper-right/lower-left)
-- **Batch Operation Logging**: Detailed processing logs with error tracking
-
-### 🎨 Priority 3: UI/UX Enhancements
-- **Real-time Preview Updates**: Live preview as user adjusts settings
-- **Drag & Drop Interface**: Drop images directly into application
-- **Progress Indicators**: Enhanced progress bars with file-by-file status
-- **Recent Projects**: Quick-load recent client configurations
-
-### 🔧 Priority 4: Professional Features
+### 🔧 Priority 2: Professional Features
 - **Cloud Storage Integration**: Direct upload to AWS S3/Google Drive
 - **API Endpoint**: REST API for automated processing
 - **Workflow Automation**: Watch folder auto-processing
 - **Quality Metrics**: Image quality analysis and optimization
 
-### 📊 Priority 5: Business Intelligence
-- **Usage Analytics**: Track processing volume and client patterns
-- **A/B Testing**: Compare different watermark configurations
-- **Client Dashboard**: Web interface for non-technical users
-- **Bulk Configuration**: CSV-driven batch settings
+### 🎯 Priority 3: Core Engine Improvements
+- **Multi-format Output Support**: Add PNG/WEBP output options (currently JPG only)
+- **Watermark Templates**: Save/load watermark configurations for different clients
+- **Advanced Positioning**: Custom QR/text positioning (not just upper-right/lower-left)
+- **Batch Operation Logging**: Detailed processing logs with error tracking
 
+### 🎨 Priority 4: UI/UX Enhancements
+- **Real-time Preview Updates**: Live preview as user adjusts settings
+- **Drag & Drop Interface**: Drop images directly into application
+- **Progress Indicators**: Enhanced progress bars with file-by-file status
+- **Recent Projects**: Quick-load recent client configurations
 ---
 
 ## 🛠️ Implementation Roadmap: AI Image Generation
 
-### Phase 1: Foundation (Week 1-2)
-**New Dependencies:**
-```python
-# requirements.txt additions
-requests>=2.28.0          # HTTP API calls
-aiohttp>=3.8.0           # Async HTTP for MCP
-openai>=1.0.0            # OpenAI DALL-E integration
-anthropic>=0.8.0         # Claude MCP integration
-```
-
-**New Architecture Components:**
-- `image_generation.py` - Core generation engine
-- `generation_ui.py` - UI components for generation workflow
-- `api_connectors/` - Modular API adapters (OpenAI, MCP, etc.)
-- Extended `config/settings.json` with generation parameters
-
-### Phase 2: Core Features (Week 3-4)
-**New UI Components:**
-- `GenerationTab` class extending existing `QTabWidget`
-- `ImagePreviewGrid` dialog for generated image review
-- `GenerationParametersForm` for aspect ratio/quality controls
-- `RevisionDialog` for prompt refinement workflow
-
-**Integration Points:**
-- Extend `WatermarkWizard` class with generation tab
-- Reuse existing `QThread` pattern for async API calls
-- Connect generation output to existing `input_images/` pipeline
-- Add generation history to existing settings management
-
-### Phase 3: Advanced Features (Week 5-6)
-- Multi-provider API switching
-- Batch generation workflows
-- Generation template saving/loading
-- Cost tracking and usage analytics
-
----
-
+### Phase 1: 
 ## 🛠️ Technical Debt & Maintenance
 
-### Immediate (Next Session)
-- **AI Integration Prerequisites**: Add async HTTP libraries and API clients
-- **UI Architecture Review**: Plan tab-based interface extension
-- **Configuration Schema**: Extend settings.json for generation parameters
-- **Error Handling**: Design robust API failure handling
-
-### Medium Term
-- **Type Safety Audit**: Complete mypy compliance across all modules
-- **Unit Testing**: Add pytest coverage for generation workflows
-- **Documentation**: API integration guides and user workflows
-- **Packaging**: Include AI dependencies in standalone executables
-
----
 
 ## 💼 Current Client Configuration
 
@@ -254,6 +198,376 @@ anthropic>=0.8.0         # Claude MCP integration
 ## ✨ Development Team
 
 **Lead Engineer:** George Penzenik (Rank Rocket Co)  
-**Documentation & Architecture:** Claude Code  
+**Documentation & Architecture:** George Penzenik  
 **Quality Assurance:** Python toolchain (ruff, black, mypy, pytest)
+
+---
+
+## ✅ Architecture Update (2025-12-24): YAML Profiles, AI Generation, Automation, S3 Upload
+
+This update extends the tool from a single `settings.json` configuration into a **multi-client, YAML-driven workflow**
+that supports:
+- Generate → QC → Watermark → Upload (S3) pipeline
+- User-selectable input/output directories (per profile)
+- Multiple saved client profiles (recent projects + quick load)
+- Provider-pluggable image generation with adapter interface
+- Automation-ready CLI runner + watch-folder mode
+
+### 🧱 Concrete Module / File Tree (Proposed)
+
+```plaintext
+Folder PATH listing for volume TOSHIBA EXT
+Volume serial number is B0D0-A4E4
+E:.
+│   .gitignore
+│   launch_designer.bat
+│   PlayfairDisplay-Regular.ttf
+│   main_ui.py
+│   qr_watermark.py
+│   rename_img.py
+│   pipeline_runner.py
+│   tree.txt
+│
+├── config
+│   ├── profiles
+│   │   ├── salvo_metal_works.yaml
+│   │   └── easy_dumpster_tampa.yaml
+│   ├── app_settings.json
+│   └── providers.yaml
+│
+├── input_images
+│   └── (user-selected at runtime; optional default folder)
+│
+├── generated_images
+│   └── (user-selected at runtime; optional default folder)
+│
+├── output_images
+│   └── (user-selected at runtime; optional default folder)
+│
+├── logs
+│   └── qrmr.log
+│
+├── ui
+│   └── designer.ui
+│
+└── qrmr
+    ├── __init__.py
+    ├── config_schema.py
+    ├── config_store.py
+    ├── image_generation.py
+    ├── provider_adapters.py
+    ├── quality_control.py
+    ├── uploader_s3.py
+    ├── watch_folder.py
+    └── utils.py
+```
+
+> Notes:
+> - Move reusable logic into a package folder (`qrmr/`) to keep UI thin and automation clean.
+> - Keep `qr_watermark.py` and `rename_img.py` as the stable engine modules; call them from `pipeline_runner.py`.
+
+---
+
+## 🔁 Configuration Architecture: settings.json → app_settings.json + YAML Profiles
+
+### Why split?
+The current `config/settings.json` mixes **client-specific job settings** (paths, NAP/QR/text overlays, slug rules) with
+**application behavior** (recents, theme, automation defaults). See the current single-file config keys like
+`input_dir`, `output_dir`, `qr_link`, and slug rules. fileciteturn3file0L1-L58
+
+### Proposed split
+1) **App-level settings** (shared across all clients):
+- UI preferences (theme, recent profiles)
+- default folders (optional)
+- automation defaults (watch-folder settings)
+- last-used profile pointer
+
+2) **Client profile YAML** (one file per client/location/campaign):
+- generation paths (where AI images land)
+- watermark settings
+- SEO naming rules
+- generation provider routing
+- upload settings (S3 bucket/prefix)
+
+### New config files
+- `config/app_settings.json` (global app config)
+- `config/profiles/<profile>.yaml` (one per client/campaign)
+- `config/providers.yaml` (API keys + provider defaults; can also be env vars)
+
+---
+
+## 📄 YAML Profile Schema (v1)
+
+Below is a **concrete** YAML profile example derived from the current JSON settings for the Tampa Dumpster campaign. fileciteturn3file0L1-L58
+
+```yaml
+{
+  "profile": {
+    "name": "Easy Dumpster Rental \u2014 Tampa FL",
+    "slug": "easy-dumpster-tampa",
+    "client_id": "easy_dumpster_rental",
+    "created": "2025-12-24",
+    "modified": "2025-12-24"
+  },
+  "paths": {
+    "generation_output_dir": "D:/OneDrive/RankRocket/Clients/Adventure Marketing/EZ Dumpster/images/Tampa FL/original",
+    "input_dir": "D:/OneDrive/RankRocket/Clients/Adventure Marketing/EZ Dumpster/images/Tampa FL/original",
+    "output_dir": "D:/OneDrive/RankRocket/Clients/Adventure Marketing/EZ Dumpster/images/Tampa FL/watermarked",
+    "archive_dir": "D:/OneDrive/RankRocket/Clients/Adventure Marketing/EZ Dumpster/images/Tampa FL/archive"
+  },
+  "generation": {
+    "mode": "auto",
+    "count": 4,
+    "width": 512,
+    "height": 512,
+    "style": "photoreal",
+    "text_strict": true,
+    "exact_text": [
+      "Easy Dumpster Rental Tampa FL",
+      "(813) 400-1178"
+    ],
+    "max_attempts_per_image": 4,
+    "timeout_seconds": 240
+  },
+  "providers": {
+    "primary": "fal",
+    "text_strict_provider": "ideogram",
+    "fallback": "stability"
+  },
+  "watermark": {
+    "qr_link": "https://easydumpsterrental.com/florida/dumpster-rental-tampa-fl",
+    "qr_size_ratio": 0.15,
+    "qr_opacity": 0.85,
+    "qr_padding_vh_ratio": 0.01574074074074074,
+    "text_overlay": "813-400-1178",
+    "text_color": [
+      255,
+      255,
+      255
+    ],
+    "shadow_color": [
+      0,
+      0,
+      0,
+      128
+    ],
+    "font_family": "Tahoma",
+    "font_size_ratio": 0.05,
+    "text_padding_bottom_ratio": 0.041666666666666664
+  },
+  "seo_naming": {
+    "enabled": true,
+    "process_recursive": false,
+    "collision_strategy": "counter",
+    "slug_prefix": "best-dumpster-rental",
+    "slug_location": "Tampa",
+    "slug_max_words": 4,
+    "slug_min_len": 4,
+    "slug_stopwords": [
+      "simple",
+      "compose",
+      "remix",
+      "beauty",
+      "installation",
+      "penzenmaster"
+    ],
+    "slug_whitelist": [
+      "copper",
+      "dormer",
+      "finial",
+      "chimney",
+      "shroud",
+      "custom",
+      "historic",
+      "home",
+      "homes",
+      "chicago",
+      "york",
+      "city",
+      "lake",
+      "front",
+      "collection",
+      "light",
+      "cupola",
+      "vane",
+      "weather"
+    ]
+  },
+  "upload": {
+    "enabled": true,
+    "provider": "aws_s3",
+    "bucket": "rankrocket-public-assets",
+    "prefix": "easy-dumpster/tampa-fl/",
+    "acl": "public-read",
+    "cache_control": "public, max-age=31536000, immutable"
+  }
+}
+```
+
+---
+
+## 🔐 Provider Credentials Policy
+
+- Client YAML profiles MUST NOT store API keys.
+- Store provider keys in `config/providers.yaml` or environment variables.
+- `providers.yaml` example (not checked into git):
+```yaml
+fal:
+  api_key: "FAL_..."
+ideogram:
+  api_key: "IDEOGRAM_..."
+stability:
+  api_key: "STABILITY_..."
+aws:
+  access_key_id: "AKIA..."
+  secret_access_key: "..."
+  region: "us-east-1"
+```
+
+---
+
+## 🧩 Provider Adapter Interface (Design)
+
+### Provider Adapter Interface (Python)
+
+All image providers must implement the same contract so the UI + pipeline can swap providers without changes.
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Protocol, Tuple
+
+@dataclass(frozen=True)
+class GenerateRequest:
+    prompt: str
+    negative_prompt: Optional[str]
+    width: int
+    height: int
+    num_images: int
+    style: Optional[str] = None
+    seed: Optional[int] = None
+    guidance: Optional[float] = None
+    steps: Optional[int] = None
+    # When text must be exact (e.g., signs/phone numbers)
+    exact_text: Optional[List[str]] = None
+    timeout_seconds: int = 240
+    meta: Optional[Dict[str, Any]] = None  # provider-specific knobs
+
+@dataclass(frozen=True)
+class GeneratedImage:
+    bytes: bytes
+    mime_type: str  # "image/png", "image/jpeg", "image/webp"
+    seed: Optional[int]
+    provider: str
+    model: Optional[str]
+    warnings: List[str]
+    meta: Dict[str, Any]
+
+@dataclass(frozen=True)
+class GenerateResult:
+    images: List[GeneratedImage]
+    request_id: Optional[str]
+    raw: Dict[str, Any]  # raw provider response for logging/debug
+
+class ImageProvider(Protocol):
+    """Provider contract."""
+
+    @property
+    def name(self) -> str: ...
+
+    def supports_styles(self) -> bool: ...
+    def supports_exact_text(self) -> bool: ...
+    def max_in_flight(self) -> int: ...
+
+    def generate(self, req: GenerateRequest) -> GenerateResult:
+        """Blocking call. Wrap in QThread/async executor in UI."""
+        ...
+
+class ProviderRegistry:
+    def __init__(self) -> None:
+        self._providers: Dict[str, ImageProvider] = {}
+
+    def register(self, provider: ImageProvider) -> None:
+        self._providers[provider.name] = provider
+
+    def get(self, name: str) -> ImageProvider:
+        return self._providers[name]
+
+    def available(self) -> List[str]:
+        return sorted(self._providers.keys())
+```
+
+Implementation notes:
+- `image_generation.py` owns orchestration (provider routing, retries, saving images to disk).
+- Individual adapters live in `provider_adapters.py` (FalProvider, IdeogramProvider, StabilityProvider).
+- Provider credentials live in `config/providers.yaml` or environment variables (never in client profiles).
+```
+
+
+---
+
+## 🧰 Multi-Client Support: Profile Store
+
+### Requirements
+- Save unlimited client profiles.
+- Load by recent list and by search.
+- Export/import a profile YAML.
+- Maintain `last_used_profile` for quick startup.
+
+### Implementation
+- `qrmr/config_store.py` manages:
+  - `profiles_dir` scanning
+  - recent list (stored in app_settings.json)
+  - validation against schema
+- `qrmr/config_schema.py` provides:
+  - dataclasses / pydantic-style validation
+  - defaults + migrations (v1 → v2)
+
+---
+
+## 🤖 Automation Readiness
+
+### CLI runner
+Add `pipeline_runner.py`:
+- `--profile config/profiles/easy_dumpster_tampa.yaml`
+- `--generate` (optional)
+- `--watermark` (default on)
+- `--upload` (optional)
+
+### Watch-folder (near-term)
+`qrmr/watch_folder.py`:
+- watches the generation output folder OR input folder
+- triggers pipeline on new files
+- writes logs + manifest
+
+### Output manifest
+Write `manifest.json` per run:
+- input file → output file mapping
+- S3 URLs if uploaded
+- provider metadata (model, seed, request_id)
+- QC results
+
+---
+
+## ✅ Updates to Existing Enhancement Priorities
+
+### Priority 1 (AI Generation Integration)
+- Expand `image_generation.py` to support **provider routing**:
+  - If `text_strict: true`, use Ideogram
+  - Else use fal (primary)
+  - Retry with Stability on failures
+- Add auto-QC loop to reduce human curation
+
+### Priority 2 (Professional Features)
+- Implement `uploader_s3.py` + `pipeline_runner.py` first
+- Add watch-folder next
+
+### Priority 3 (Core Engine Improvements)
+- Multi-format output is now a pipeline option (`output_format: jpg|png|webp`)
+- Templates are now YAML profiles
+
+### Priority 4 (UI/UX Enhancements)
+- "Recent Projects" becomes recent profile list (multi-client)
+- "Generate Images" tab writes images into `generation_output_dir` and can optionally auto-run pipeline
 
