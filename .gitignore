@@ -58,6 +58,9 @@ config.json
 credentials.json
 secrets.json
 
+# === RUNTIME CLIENT SETTINGS (changes per client/campaign) ===
+config/settings.json
+
 # === PIP REQUIREMENTS ===
 pip-log.txt
 pip-delete-this-directory.txt
