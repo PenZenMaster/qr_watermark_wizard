@@ -4,6 +4,8 @@ REM Project Startup Script
 REM Author: Skippy the Code Slayer (with Big G)
 REM ======================================================
 
+E:
+cd projects\qr_watermark_wizard
 REM Create venv only if it doesn't already exist
 if not exist ".venv" (
     echo Creating virtual environment...
