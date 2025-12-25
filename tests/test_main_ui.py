@@ -201,12 +201,15 @@ class TestConfigurationValidation:
 class TestConfigurationPaths:
     """Test path handling in configuration."""
 
-    @pytest.mark.parametrize("path_type,test_path", [
-        ("windows_absolute", "E:/projects/test/input"),
-        ("windows_backslash", "E:\\projects\\test\\input"),
-        ("unix_absolute", "/home/user/projects/input"),
-        ("relative", "./input_images"),
-    ])
+    @pytest.mark.parametrize(
+        "path_type,test_path",
+        [
+            ("windows_absolute", "E:/projects/test/input"),
+            ("windows_backslash", "E:\\projects\\test\\input"),
+            ("unix_absolute", "/home/user/projects/input"),
+            ("relative", "./input_images"),
+        ],
+    )
     def test_various_path_formats(self, tmp_path, path_type, test_path):
         """Test various path formats are preserved."""
         config_data = {
@@ -228,7 +231,7 @@ class TestColorConfiguration:
         """Test RGB color arrays are preserved."""
         config_data = {
             "text_color": [255, 255, 255],  # White
-            "shadow_color": [0, 0, 0],      # Black
+            "shadow_color": [0, 0, 0],  # Black
         }
 
         config_file = tmp_path / "color_config.json"
@@ -251,13 +254,16 @@ class TestColorConfiguration:
 
         assert loaded["shadow_color"] == [0, 0, 0, 128]
 
-    @pytest.mark.parametrize("color,is_valid", [
-        ([255, 255, 255], True),      # Valid RGB
-        ([0, 0, 0, 128], True),       # Valid RGBA
-        ([255, 100, 50], True),       # Valid RGB
-        ([300, 100, 50], False),      # Invalid - value > 255
-        ([-1, 100, 50], False),       # Invalid - negative
-    ])
+    @pytest.mark.parametrize(
+        "color,is_valid",
+        [
+            ([255, 255, 255], True),  # Valid RGB
+            ([0, 0, 0, 128], True),  # Valid RGBA
+            ([255, 100, 50], True),  # Valid RGB
+            ([300, 100, 50], False),  # Invalid - value > 255
+            ([-1, 100, 50], False),  # Invalid - negative
+        ],
+    )
     def test_color_value_ranges(self, tmp_path, color, is_valid):
         """Test color value validation."""
         if is_valid:
@@ -269,15 +275,18 @@ class TestColorConfiguration:
 class TestRatioConfiguration:
     """Test ratio value handling."""
 
-    @pytest.mark.parametrize("ratio_name,ratio_value,is_valid", [
-        ("qr_size_ratio", 0.15, True),
-        ("qr_opacity", 0.85, True),
-        ("font_size_ratio", 0.03, True),
-        ("qr_size_ratio", 1.5, False),   # > 1.0
-        ("qr_opacity", -0.1, False),      # Negative
-        ("qr_size_ratio", 0.0, True),     # Edge case: zero
-        ("qr_opacity", 1.0, True),        # Edge case: max
-    ])
+    @pytest.mark.parametrize(
+        "ratio_name,ratio_value,is_valid",
+        [
+            ("qr_size_ratio", 0.15, True),
+            ("qr_opacity", 0.85, True),
+            ("font_size_ratio", 0.03, True),
+            ("qr_size_ratio", 1.5, False),  # > 1.0
+            ("qr_opacity", -0.1, False),  # Negative
+            ("qr_size_ratio", 0.0, True),  # Edge case: zero
+            ("qr_opacity", 1.0, True),  # Edge case: max
+        ],
+    )
     def test_ratio_value_ranges(self, tmp_path, ratio_name, ratio_value, is_valid):
         """Test ratio values are in valid range (0.0-1.0)."""
         if is_valid:

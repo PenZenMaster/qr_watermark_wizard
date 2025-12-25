@@ -419,7 +419,7 @@ class WatermarkWizard(QtWidgets.QMainWindow):
 
             # Simple styling without font CSS
             label_style = """
-                color: #333; 
+                color: #333;
                 margin-bottom: 4px;
                 padding: 2px;
             """
@@ -889,20 +889,20 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         collision_combo = getattr(self, "collisionCombo", None)
         if collision_combo:
             self.config["collision_strategy"] = collision_combo.currentText()
-        
+
         # Slug prefix and location from UI fields
         slug_prefix_edit = getattr(self, "slugPrefixEdit", None)
         if slug_prefix_edit:
             self.config["slug_prefix"] = slug_prefix_edit.text().strip()
         else:
             self.config.setdefault("slug_prefix", "")
-            
+
         slug_location_edit = getattr(self, "slugLocationEdit", None)
         if slug_location_edit:
             self.config["slug_location"] = slug_location_edit.text().strip()
         else:
             self.config.setdefault("slug_location", "")
-        
+
         # Optional advanced fields (keep if already present)
         self.config.setdefault("slug_max_words", 6)
         self.config.setdefault("slug_min_len", 3)
@@ -956,7 +956,7 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             self.slugPrefixEdit = QLineEdit(host)
             self.slugPrefixEdit.setText(self.config.get("slug_prefix", ""))
             self.slugPrefixEdit.setPlaceholderText("e.g., send-out-cards, company-name")
-            
+
             self.slugLocationLabel = QLabel("Slug Location:", host)
             self.slugLocationEdit = QLineEdit(host)
             self.slugLocationEdit.setText(self.config.get("slug_location", ""))

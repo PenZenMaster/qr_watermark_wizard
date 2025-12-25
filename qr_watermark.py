@@ -172,7 +172,7 @@ def apply_watermark(
         try:
             font = ImageFont.truetype("arial.ttf", font_size)
         except IOError:
-            font = ImageFont.load_default()
+            font = ImageFont.load_default()  # type: ignore[assignment]
         lines = TEXT_OVERLAY.splitlines()
         total_height = sum(
             font.getbbox(line)[3] - font.getbbox(line)[1] for line in lines
@@ -207,7 +207,7 @@ def apply_watermark(
             save_kwargs["exif"] = exif_bytes
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
-        base_img.convert("RGB").save(output_path, "JPEG", **save_kwargs)
+        base_img.convert("RGB").save(output_path, "JPEG", **save_kwargs)  # type: ignore[arg-type]
         print(f"[SUCCESS] Processed: {output_path}")
     except Exception as e:
         error_msg = f"[ERROR] Error processing {image_path}: {e}"
