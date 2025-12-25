@@ -52,7 +52,7 @@
 
 ## Next Session Priorities
 1. **AI Integration Phase 1**: Add dependencies (OpenAI, Claude MCP, aiohttp) and core architecture
-2. **UI Architecture Extension**: Design tab-based interface for generation workflow  
+2. **UI Architecture Extension**: Design tab-based interface for generation workflow
 3. **API Connector Development**: Start with OpenAI DALL-E integration as primary provider
 
 ## Backlog

@@ -239,7 +239,7 @@ DELETE RULE → <Section Anchor>
 ## 9) Current Version Status
 
 * **UI Version**: v1.07.31 (main_ui.py)
-* **Engine Version**: v1.07.15 (qr_watermark.py) 
+* **Engine Version**: v1.07.15 (qr_watermark.py)
 * **Architecture**: Production-ready PyQt6 application
 * **Active Client**: Salvo Metal Works (copper dormer specialist)
 * **Next Major Feature**: AI Image Generation Integration (Priority 1)
