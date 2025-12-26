@@ -13,12 +13,13 @@ Created Date:
 04-14-2025
 
 Last Modified Date:
-08-01-2025
+12-26-2025
 
 Version:
-v2.0.0
+v2.1.0
 
 Comments:
+- v2.1.0: Phase 3 - AI Generation UI complete. Added AI Generation tab with provider selection (Fal.ai, Ideogram, Stability AI), prompt controls, parameter tuning, async generation with progress feedback, preview grid, save/send-to-watermark functionality.
 - v2.0.0: Major version bump for AI image generation feature development. Added comprehensive unit testing framework (105 tests). Semantic versioning implemented.
 - v1.07.31: Fixed all Pylance errors including method definitions, syntax issues, and removed obsolete method references.
 """
@@ -27,7 +28,7 @@ import sys
 import os
 import json
 import io
-from typing import Optional, cast, Any
+from typing import Optional, cast, Any, List
 from PyQt6 import QtWidgets
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -43,6 +44,12 @@ from PyQt6.QtWidgets import (
     QFontComboBox,
     QPushButton,
     QHBoxLayout,
+    QTextEdit,
+    QSpinBox,
+    QGroupBox,
+    QScrollArea,
+    QGridLayout,
+    QTabWidget,
 )
 from PyQt6.QtGui import QPixmap, QFont
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer
@@ -50,6 +57,20 @@ from PIL import Image
 from PIL.ImageQt import ImageQt
 from ui.designer_ui import Ui_WatermarkWizard
 import qr_watermark
+
+# AI Generation imports
+try:
+    from qrmr.provider_adapters import (
+        create_default_registry,
+        load_provider_credentials,
+        GenerateRequest,
+        ProviderError,
+    )
+
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
+    print("Warning: AI generation modules not available")
 
 
 def load_config(path: str = "config/settings.json") -> dict:
@@ -149,6 +170,88 @@ class WatermarkThread(QThread):
             self.error.emit(f"Critical error during processing: {str(e)}")
 
 
+class AIGenerationThread(QThread):
+    """Thread for AI image generation without blocking UI"""
+
+    finished = pyqtSignal(list)  # List of PIL Images
+    error = pyqtSignal(str)
+    progress = pyqtSignal(str)
+
+    def __init__(
+        self,
+        provider_name: str,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        num_images: int,
+        seed: Optional[int] = None,
+    ):
+        super().__init__()
+        self.provider_name = provider_name
+        self.prompt = prompt
+        self.negative_prompt = negative_prompt
+        self.width = width
+        self.height = height
+        self.num_images = num_images
+        self.seed = seed
+
+    def run(self) -> None:
+        try:
+            if not AI_AVAILABLE:
+                self.error.emit("AI generation modules not available")
+                return
+
+            self.progress.emit(f"Loading {self.provider_name} provider...")
+
+            # Load provider credentials and create registry
+            try:
+                credentials = load_provider_credentials()
+                registry = create_default_registry(credentials)
+                provider = registry.get(self.provider_name)
+            except FileNotFoundError:
+                self.error.emit(
+                    "Provider credentials not found. Please create config/providers.yaml with your API keys."
+                )
+                return
+            except KeyError:
+                self.error.emit(
+                    f"Provider '{self.provider_name}' not found in registry"
+                )
+                return
+
+            self.progress.emit(f"Generating {self.num_images} image(s)...")
+
+            # Create generation request
+            request = GenerateRequest(
+                prompt=self.prompt,
+                negative_prompt=self.negative_prompt if self.negative_prompt else None,
+                width=self.width,
+                height=self.height,
+                num_images=self.num_images,
+                seed=self.seed,
+            )
+
+            # Generate images
+            result = provider.generate(request)
+
+            self.progress.emit("Converting images...")
+
+            # Convert bytes to PIL Images
+            images = []
+            for gen_img in result.images:
+                img = Image.open(io.BytesIO(gen_img.bytes))
+                images.append(img)
+
+            self.progress.emit(f"Successfully generated {len(images)} image(s)!")
+            self.finished.emit(images)
+
+        except ProviderError as e:
+            self.error.emit(f"Provider error: {e.message}")
+        except Exception as e:
+            self.error.emit(f"Generation failed: {str(e)}")
+
+
 class WatermarkWizard(QtWidgets.QMainWindow):
     # Class-level attribute stubs for Pylance/typing
     recursiveCheck: Optional[Any]
@@ -174,6 +277,20 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         self.font_size_combo: Optional[QComboBox] = None
         self.tick_labels: list[QLabel] = []  # Store tick labels for cleanup
 
+        # AI Generation attributes
+        self.ai_thread: Optional[AIGenerationThread] = None
+        self.generated_images: List[Image.Image] = []
+        self.ai_tab_widget: Optional[QTabWidget] = None
+        self.ai_provider_combo: Optional[QComboBox] = None
+        self.ai_prompt_text: Optional[QTextEdit] = None
+        self.ai_negative_prompt_text: Optional[QTextEdit] = None
+        self.ai_width_spin: Optional[QSpinBox] = None
+        self.ai_height_spin: Optional[QSpinBox] = None
+        self.ai_num_images_spin: Optional[QSpinBox] = None
+        self.ai_seed_spin: Optional[QSpinBox] = None
+        self.ai_preview_grid: Optional[QGridLayout] = None
+        self.ai_generate_btn: Optional[QPushButton] = None
+
         # Improve overall UI appearance
         self.improve_ui_styling()
 
@@ -187,6 +304,10 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         self.exportMapBtn: Optional[Any] = None
         self.load_values()
         self.add_extra_controls()
+
+        # Setup AI Generation tab if available
+        if AI_AVAILABLE:
+            self.setup_ai_generation_tab()
 
         # Use timer to add tick labels after UI is fully rendered
         QTimer.singleShot(100, self.add_tick_labels)
@@ -1207,6 +1328,408 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             from PyQt6.QtWidgets import QMessageBox
 
             QMessageBox.critical(self, "Export Mapping", f"Error: {e}")
+
+    def setup_ai_generation_tab(self) -> None:
+        """Setup AI Image Generation tab"""
+        try:
+            # Create tab widget if not exists
+            if not hasattr(self, "ai_tab_widget") or self.ai_tab_widget is None:
+                # Create tab widget and add to main layout
+                self.ai_tab_widget = QTabWidget(self.centralWidget())
+
+                # Insert tab widget after existing content
+                main_layout = self.centralWidget().layout()
+                if main_layout:
+                    main_layout.addWidget(self.ai_tab_widget)
+
+                # Note: Full tab reorganization (moving existing watermark UI to first tab)
+                # is deferred to future enhancement. For now, AI Generation is added as a tab.
+
+            # Create AI Generation tab
+            ai_widget = QWidget()
+            ai_layout = QVBoxLayout(ai_widget)
+
+            # Provider Selection Group
+            provider_group = QGroupBox("Provider Selection")
+            provider_layout = QVBoxLayout()
+
+            provider_label = QLabel("AI Provider:")
+            self.ai_provider_combo = QComboBox()
+            self.ai_provider_combo.addItems(["fal", "ideogram", "stability"])
+            self.ai_provider_combo.setToolTip("Select AI image generation provider")
+
+            provider_layout.addWidget(provider_label)
+            provider_layout.addWidget(self.ai_provider_combo)
+            provider_group.setLayout(provider_layout)
+            ai_layout.addWidget(provider_group)
+
+            # Prompt Group
+            prompt_group = QGroupBox("Image Generation")
+            prompt_layout = QVBoxLayout()
+
+            # Prompt
+            prompt_label = QLabel("Prompt (describe the image):")
+            self.ai_prompt_text = QTextEdit()
+            self.ai_prompt_text.setPlaceholderText(
+                "Example: A professional business card with modern design..."
+            )
+            self.ai_prompt_text.setMaximumHeight(100)
+
+            # Negative Prompt
+            neg_prompt_label = QLabel("Negative Prompt (what to avoid):")
+            self.ai_negative_prompt_text = QTextEdit()
+            self.ai_negative_prompt_text.setPlaceholderText(
+                "Example: blurry, low quality, distorted..."
+            )
+            self.ai_negative_prompt_text.setMaximumHeight(60)
+
+            prompt_layout.addWidget(prompt_label)
+            prompt_layout.addWidget(self.ai_prompt_text)
+            prompt_layout.addWidget(neg_prompt_label)
+            prompt_layout.addWidget(self.ai_negative_prompt_text)
+            prompt_group.setLayout(prompt_layout)
+            ai_layout.addWidget(prompt_group)
+
+            # Parameters Group
+            params_group = QGroupBox("Generation Parameters")
+            params_layout = QGridLayout()
+
+            # Width
+            params_layout.addWidget(QLabel("Width:"), 0, 0)
+            self.ai_width_spin = QSpinBox()
+            self.ai_width_spin.setRange(256, 2048)
+            self.ai_width_spin.setValue(1024)
+            self.ai_width_spin.setSingleStep(64)
+            params_layout.addWidget(self.ai_width_spin, 0, 1)
+
+            # Height
+            params_layout.addWidget(QLabel("Height:"), 0, 2)
+            self.ai_height_spin = QSpinBox()
+            self.ai_height_spin.setRange(256, 2048)
+            self.ai_height_spin.setValue(1024)
+            self.ai_height_spin.setSingleStep(64)
+            params_layout.addWidget(self.ai_height_spin, 0, 3)
+
+            # Number of images
+            params_layout.addWidget(QLabel("Number of Images:"), 1, 0)
+            self.ai_num_images_spin = QSpinBox()
+            self.ai_num_images_spin.setRange(1, 4)
+            self.ai_num_images_spin.setValue(1)
+            params_layout.addWidget(self.ai_num_images_spin, 1, 1)
+
+            # Seed
+            params_layout.addWidget(QLabel("Seed (0 = random):"), 1, 2)
+            self.ai_seed_spin = QSpinBox()
+            self.ai_seed_spin.setRange(0, 999999)
+            self.ai_seed_spin.setValue(0)
+            params_layout.addWidget(self.ai_seed_spin, 1, 3)
+
+            params_group.setLayout(params_layout)
+            ai_layout.addWidget(params_group)
+
+            # Generate Button
+            self.ai_generate_btn = QPushButton("Generate Images")
+            self.ai_generate_btn.setMinimumHeight(40)
+            self.ai_generate_btn.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #0078d4;
+                    color: white;
+                    font-size: 12pt;
+                    font-weight: bold;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #106ebe;
+                }
+                QPushButton:pressed {
+                    background-color: #005a9e;
+                }
+                QPushButton:disabled {
+                    background-color: #cccccc;
+                    color: #666666;
+                }
+            """
+            )
+            self.ai_generate_btn.clicked.connect(self.generate_ai_images)
+            ai_layout.addWidget(self.ai_generate_btn)
+
+            # Preview Area
+            preview_group = QGroupBox("Generated Images")
+            preview_layout = QVBoxLayout()
+
+            # Scroll area for image grid
+            scroll_area = QScrollArea()
+            scroll_area.setWidgetResizable(True)
+            scroll_widget = QWidget()
+            self.ai_preview_grid = QGridLayout(scroll_widget)
+            scroll_area.setWidget(scroll_widget)
+
+            preview_layout.addWidget(scroll_area)
+            preview_group.setLayout(preview_layout)
+            ai_layout.addWidget(preview_group)
+
+            # Add AI tab to tab widget
+            if self.ai_tab_widget:
+                self.ai_tab_widget.addTab(ai_widget, "AI Generation")
+
+            print("AI Generation tab setup complete")
+
+        except Exception as e:
+            print(f"Error setting up AI Generation tab: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    def generate_ai_images(self) -> None:
+        """Start AI image generation"""
+        try:
+            if not AI_AVAILABLE:
+                QMessageBox.warning(
+                    self,
+                    "AI Not Available",
+                    "AI generation modules are not installed or configured.",
+                )
+                return
+
+            if self.ai_thread and self.ai_thread.isRunning():
+                QMessageBox.information(
+                    self,
+                    "Generation in Progress",
+                    "AI image generation is already running!",
+                )
+                return
+
+            # Validate inputs
+            if not self.ai_prompt_text or not self.ai_prompt_text.toPlainText().strip():
+                QMessageBox.warning(
+                    self,
+                    "Missing Prompt",
+                    "Please enter a prompt describing the image you want to generate.",
+                )
+                return
+
+            # Get parameters
+            provider = (
+                self.ai_provider_combo.currentText()
+                if self.ai_provider_combo
+                else "fal"
+            )
+            prompt = self.ai_prompt_text.toPlainText().strip()
+            negative_prompt = (
+                self.ai_negative_prompt_text.toPlainText().strip()
+                if self.ai_negative_prompt_text
+                else ""
+            )
+            width = self.ai_width_spin.value() if self.ai_width_spin else 1024
+            height = self.ai_height_spin.value() if self.ai_height_spin else 1024
+            num_images = (
+                self.ai_num_images_spin.value() if self.ai_num_images_spin else 1
+            )
+            seed = self.ai_seed_spin.value() if self.ai_seed_spin else None
+            if seed == 0:
+                seed = None
+
+            # Disable generate button
+            if self.ai_generate_btn:
+                self.ai_generate_btn.setEnabled(False)
+                self.ai_generate_btn.setText("Generating...")
+
+            # Create progress dialog
+            self.progress_dialog = QProgressDialog(
+                "Initializing AI generation...", "Cancel", 0, 0, self
+            )
+            self.progress_dialog.setWindowTitle("Generating Images")
+            self.progress_dialog.setModal(True)
+            self.progress_dialog.show()
+
+            # Create and start AI generation thread
+            self.ai_thread = AIGenerationThread(
+                provider_name=provider,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                width=width,
+                height=height,
+                num_images=num_images,
+                seed=seed,
+            )
+            self.ai_thread.finished.connect(self.on_ai_generation_finished)
+            self.ai_thread.error.connect(self.on_ai_generation_error)
+            self.ai_thread.progress.connect(self.on_ai_generation_progress)
+            self.ai_thread.start()
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Generation Error", f"Failed to start generation: {str(e)}"
+            )
+            if self.ai_generate_btn:
+                self.ai_generate_btn.setEnabled(True)
+                self.ai_generate_btn.setText("Generate Images")
+
+    def on_ai_generation_progress(self, message: str) -> None:
+        """Handle AI generation progress updates"""
+        if self.progress_dialog:
+            self.progress_dialog.setLabelText(message)
+        print(f"AI Generation Progress: {message}")
+
+    def on_ai_generation_finished(self, images: List[Image.Image]) -> None:
+        """Handle successful AI image generation"""
+        if self.ai_generate_btn:
+            self.ai_generate_btn.setEnabled(True)
+            self.ai_generate_btn.setText("Generate Images")
+
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+
+        # Store generated images
+        self.generated_images = images
+
+        # Display images in preview grid
+        self.display_generated_images(images)
+
+        QMessageBox.information(
+            self,
+            "Generation Complete",
+            f"Successfully generated {len(images)} image(s)!",
+        )
+
+    def on_ai_generation_error(self, error_msg: str) -> None:
+        """Handle AI generation errors"""
+        if self.ai_generate_btn:
+            self.ai_generate_btn.setEnabled(True)
+            self.ai_generate_btn.setText("Generate Images")
+
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+
+        QMessageBox.critical(
+            self, "Generation Failed", f"AI image generation failed:\n\n{error_msg}"
+        )
+
+    def display_generated_images(self, images: List[Image.Image]) -> None:
+        """Display generated images in preview grid"""
+        try:
+            if not self.ai_preview_grid:
+                return
+
+            # Clear existing preview
+            while self.ai_preview_grid.count():
+                item = self.ai_preview_grid.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+
+            # Display images in grid (2 columns)
+            for idx, img in enumerate(images):
+                row = idx // 2
+                col = idx % 2
+
+                # Create image label
+                img_label = QLabel()
+
+                # Convert PIL to QPixmap
+                img_bytes = io.BytesIO()
+                img.save(img_bytes, format="PNG")
+                img_bytes.seek(0)
+                pix = QPixmap()
+                pix.loadFromData(img_bytes.getvalue())
+
+                # Scale to reasonable size
+                pix = pix.scaled(400, 400, Qt.AspectRatioMode.KeepAspectRatio)
+                img_label.setPixmap(pix)
+                img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                # Create container with save button
+                container = QWidget()
+                container_layout = QVBoxLayout(container)
+                container_layout.addWidget(img_label)
+
+                # Save button
+                save_btn = QPushButton(f"Save Image {idx + 1}")
+                save_btn.clicked.connect(
+                    lambda checked, i=idx: self.save_generated_image(i)
+                )
+                container_layout.addWidget(save_btn)
+
+                # Send to watermark button
+                watermark_btn = QPushButton("Send to Watermark")
+                watermark_btn.clicked.connect(
+                    lambda checked, i=idx: self.send_to_watermark(i)
+                )
+                container_layout.addWidget(watermark_btn)
+
+                self.ai_preview_grid.addWidget(container, row, col)
+
+            print(f"Displayed {len(images)} generated images")
+
+        except Exception as e:
+            print(f"Error displaying images: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    def save_generated_image(self, index: int) -> None:
+        """Save a generated image to file"""
+        try:
+            if index >= len(self.generated_images):
+                return
+
+            img = self.generated_images[index]
+
+            # Get save location
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save Generated Image",
+                os.path.join(os.getcwd(), f"ai_generated_{index + 1}.png"),
+                "PNG Files (*.png);;JPEG Files (*.jpg);;All Files (*.*)",
+            )
+
+            if file_path:
+                img.save(file_path)
+                QMessageBox.information(
+                    self, "Image Saved", f"Image saved to:\n{file_path}"
+                )
+
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", f"Failed to save image: {str(e)}")
+
+    def send_to_watermark(self, index: int) -> None:
+        """Send generated image to input directory for watermarking"""
+        try:
+            if index >= len(self.generated_images):
+                return
+
+            img = self.generated_images[index]
+
+            # Get input directory from config
+            input_dir = self.config.get("input_dir", "")
+            if not input_dir or not os.path.isdir(input_dir):
+                QMessageBox.warning(
+                    self,
+                    "Input Directory Not Set",
+                    "Please set an input directory first in the Watermark tab.",
+                )
+                return
+
+            # Generate filename
+            timestamp = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"ai_generated_{timestamp}_{index + 1}.png"
+            file_path = os.path.join(input_dir, filename)
+
+            # Save image
+            img.save(file_path)
+
+            QMessageBox.information(
+                self,
+                "Image Added",
+                f"Image saved to input directory:\n{filename}\n\nYou can now apply watermark to it.",
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error", f"Failed to send image to watermark: {str(e)}"
+            )
 
 
 if __name__ == "__main__":
