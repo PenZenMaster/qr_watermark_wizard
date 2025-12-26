@@ -1090,24 +1090,36 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             self.previewSeoBtn = QPushButton("Preview SEO Names", host)
             self.exportMapBtn = QPushButton("Export Mapping CSV", host)
 
-            # Insert before Run button when we can; otherwise append
-            run_index = None
+            # Insert before Preview button when we can; otherwise append
+            preview_index = None
             if isinstance(layout, QBoxLayout):
+                for i in range(layout.count()):
+                    item = layout.itemAt(i)
+                    if item and item.widget() is self.ui.previewBtn:
+                        preview_index = i
+                        break
+                if preview_index is None:
+                    preview_index = layout.count()
+                # Insert slug controls before preview button
+                layout.insertWidget(preview_index, self.slugPrefixLabel)
+                layout.insertWidget(preview_index + 1, self.slugPrefixEdit)
+                layout.insertWidget(preview_index + 2, self.slugLocationLabel)
+                layout.insertWidget(preview_index + 3, self.slugLocationEdit)
+                layout.insertWidget(preview_index + 4, self.previewSeoBtn)
+                layout.insertWidget(preview_index + 5, self.exportMapBtn)
+                # Insert other controls after run button
+                run_index = None
                 for i in range(layout.count()):
                     item = layout.itemAt(i)
                     if item and item.widget() is self.ui.runBtn:
                         run_index = i
                         break
-                if run_index is None:
-                    run_index = layout.count()
-                layout.insertWidget(run_index, self.slugPrefixLabel)
-                layout.insertWidget(run_index + 1, self.slugPrefixEdit)
-                layout.insertWidget(run_index + 2, self.slugLocationLabel)
-                layout.insertWidget(run_index + 3, self.slugLocationEdit)
-                layout.insertWidget(run_index + 4, self.previewSeoBtn)
-                layout.insertWidget(run_index + 5, self.exportMapBtn)
-                layout.insertWidget(run_index + 6, self.collisionCombo)
-                layout.insertWidget(run_index + 7, self.recursiveCheck)
+                if run_index is not None:
+                    layout.insertWidget(run_index, self.collisionCombo)
+                    layout.insertWidget(run_index + 1, self.recursiveCheck)
+                else:
+                    layout.addWidget(self.collisionCombo)
+                    layout.addWidget(self.recursiveCheck)
             else:
                 # Generic layouts (QGridLayout/QFormLayout/unknown): just append
                 for w in (
@@ -1339,9 +1351,11 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             # Create tab widget if not exists
             if not hasattr(self, "ai_tab_widget") or self.ai_tab_widget is None:
                 # Get the main vertical layout
+                from PyQt6.QtWidgets import QVBoxLayout as VBoxLayout
+
                 main_layout = self.centralWidget().layout()
-                if not main_layout:
-                    print("Error: No main layout found")
+                if not main_layout or not isinstance(main_layout, VBoxLayout):
+                    print("Error: No main layout found or not QVBoxLayout")
                     return
 
                 # Create tab widget
@@ -1369,8 +1383,8 @@ class WatermarkWizard(QtWidgets.QMainWindow):
                 # Add watermark tab as first tab
                 self.ai_tab_widget.addTab(watermark_tab, "Watermark")
 
-                # Add tab widget to main layout
-                main_layout.addWidget(self.ai_tab_widget)
+                # Add tab widget to main layout at the top (position 0)
+                main_layout.insertWidget(0, self.ai_tab_widget)
 
             # Create AI Generation tab
             ai_widget = QWidget()
