@@ -267,6 +267,10 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_WatermarkWizard()
         self.ui.setupUi(self)
+
+        # Set application title with version
+        self.setWindowTitle("Rank Rocket Watermark Wizard v2.1.0")
+
         self.config = load_config()
         self.watermark_thread: Optional[WatermarkThread] = None
         self.progress_dialog: Optional[QProgressDialog] = None
@@ -1334,16 +1338,39 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         try:
             # Create tab widget if not exists
             if not hasattr(self, "ai_tab_widget") or self.ai_tab_widget is None:
-                # Create tab widget and add to main layout
-                self.ai_tab_widget = QTabWidget(self.centralWidget())
-
-                # Insert tab widget after existing content
+                # Get the main vertical layout
                 main_layout = self.centralWidget().layout()
-                if main_layout:
-                    main_layout.addWidget(self.ai_tab_widget)
+                if not main_layout:
+                    print("Error: No main layout found")
+                    return
 
-                # Note: Full tab reorganization (moving existing watermark UI to first tab)
-                # is deferred to future enhancement. For now, AI Generation is added as a tab.
+                # Create tab widget
+                self.ai_tab_widget = QTabWidget()
+
+                # Create Watermark tab widget
+                watermark_tab = QWidget()
+                watermark_layout = QVBoxLayout(watermark_tab)
+
+                # Move existing formLayout to watermark tab
+                if hasattr(self.ui, "formLayout"):
+                    # Remove formLayout from main layout
+                    main_layout.removeItem(self.ui.formLayout)
+                    watermark_layout.addLayout(self.ui.formLayout)
+
+                # Move preview and run buttons to watermark tab
+                if hasattr(self.ui, "previewBtn"):
+                    main_layout.removeWidget(self.ui.previewBtn)
+                    watermark_layout.addWidget(self.ui.previewBtn)
+
+                if hasattr(self.ui, "runBtn"):
+                    main_layout.removeWidget(self.ui.runBtn)
+                    watermark_layout.addWidget(self.ui.runBtn)
+
+                # Add watermark tab as first tab
+                self.ai_tab_widget.addTab(watermark_tab, "Watermark")
+
+                # Add tab widget to main layout
+                main_layout.addWidget(self.ai_tab_widget)
 
             # Create AI Generation tab
             ai_widget = QWidget()
