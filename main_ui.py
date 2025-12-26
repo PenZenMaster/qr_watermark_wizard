@@ -13,12 +13,14 @@ Created Date:
 04-14-2025
 
 Last Modified Date:
-08-01-2025
+12-26-2025
 
 Version:
-v1.07.31
+v2.1.0
 
 Comments:
+- v2.1.0: Phase 3 - AI Generation UI complete. Added AI Generation tab with provider selection (Fal.ai, Ideogram, Stability AI), prompt controls, parameter tuning, async generation with progress feedback, preview grid, save/send-to-watermark functionality.
+- v2.0.0: Major version bump for AI image generation feature development. Added comprehensive unit testing framework (105 tests). Semantic versioning implemented.
 - v1.07.31: Fixed all Pylance errors including method definitions, syntax issues, and removed obsolete method references.
 """
 
@@ -26,7 +28,7 @@ import sys
 import os
 import json
 import io
-from typing import Optional, cast, Any
+from typing import Optional, cast, Any, List
 from PyQt6 import QtWidgets
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -42,6 +44,14 @@ from PyQt6.QtWidgets import (
     QFontComboBox,
     QPushButton,
     QHBoxLayout,
+    QTextEdit,
+    QSpinBox,
+    QGroupBox,
+    QScrollArea,
+    QGridLayout,
+    QTabWidget,
+    QLineEdit,
+    QCheckBox,
 )
 from PyQt6.QtGui import QPixmap, QFont
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer
@@ -49,6 +59,20 @@ from PIL import Image
 from PIL.ImageQt import ImageQt
 from ui.designer_ui import Ui_WatermarkWizard
 import qr_watermark
+
+# AI Generation imports
+try:
+    from qrmr.provider_adapters import (
+        create_default_registry,
+        load_provider_credentials,
+        GenerateRequest,
+        ProviderError,
+    )
+
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
+    print("Warning: AI generation modules not available")
 
 
 def load_config(path: str = "config/settings.json") -> dict:
@@ -148,6 +172,88 @@ class WatermarkThread(QThread):
             self.error.emit(f"Critical error during processing: {str(e)}")
 
 
+class AIGenerationThread(QThread):
+    """Thread for AI image generation without blocking UI"""
+
+    finished = pyqtSignal(list)  # List of PIL Images
+    error = pyqtSignal(str)
+    progress = pyqtSignal(str)
+
+    def __init__(
+        self,
+        provider_name: str,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        num_images: int,
+        seed: Optional[int] = None,
+    ):
+        super().__init__()
+        self.provider_name = provider_name
+        self.prompt = prompt
+        self.negative_prompt = negative_prompt
+        self.width = width
+        self.height = height
+        self.num_images = num_images
+        self.seed = seed
+
+    def run(self) -> None:
+        try:
+            if not AI_AVAILABLE:
+                self.error.emit("AI generation modules not available")
+                return
+
+            self.progress.emit(f"Loading {self.provider_name} provider...")
+
+            # Load provider credentials and create registry
+            try:
+                credentials = load_provider_credentials()
+                registry = create_default_registry(credentials)
+                provider = registry.get(self.provider_name)
+            except FileNotFoundError:
+                self.error.emit(
+                    "Provider credentials not found. Please create config/providers.yaml with your API keys."
+                )
+                return
+            except KeyError:
+                self.error.emit(
+                    f"Provider '{self.provider_name}' not found in registry"
+                )
+                return
+
+            self.progress.emit(f"Generating {self.num_images} image(s)...")
+
+            # Create generation request
+            request = GenerateRequest(
+                prompt=self.prompt,
+                negative_prompt=self.negative_prompt if self.negative_prompt else None,
+                width=self.width,
+                height=self.height,
+                num_images=self.num_images,
+                seed=self.seed,
+            )
+
+            # Generate images
+            result = provider.generate(request)
+
+            self.progress.emit("Converting images...")
+
+            # Convert bytes to PIL Images
+            images = []
+            for gen_img in result.images:
+                img = Image.open(io.BytesIO(gen_img.bytes))
+                images.append(img)
+
+            self.progress.emit(f"Successfully generated {len(images)} image(s)!")
+            self.finished.emit(images)
+
+        except ProviderError as e:
+            self.error.emit(f"Provider error: {e.message}")
+        except Exception as e:
+            self.error.emit(f"Generation failed: {str(e)}")
+
+
 class WatermarkWizard(QtWidgets.QMainWindow):
     # Class-level attribute stubs for Pylance/typing
     recursiveCheck: Optional[Any]
@@ -163,6 +269,10 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_WatermarkWizard()
         self.ui.setupUi(self)
+
+        # Set application title with version
+        self.setWindowTitle("Rank Rocket Watermark Wizard v2.1.0")
+
         self.config = load_config()
         self.watermark_thread: Optional[WatermarkThread] = None
         self.progress_dialog: Optional[QProgressDialog] = None
@@ -172,6 +282,20 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         self.font_family_combo: Optional[QFontComboBox] = None
         self.font_size_combo: Optional[QComboBox] = None
         self.tick_labels: list[QLabel] = []  # Store tick labels for cleanup
+
+        # AI Generation attributes
+        self.ai_thread: Optional[AIGenerationThread] = None
+        self.generated_images: List[Image.Image] = []
+        self.ai_tab_widget: Optional[QTabWidget] = None
+        self.ai_provider_combo: Optional[QComboBox] = None
+        self.ai_prompt_text: Optional[QTextEdit] = None
+        self.ai_negative_prompt_text: Optional[QTextEdit] = None
+        self.ai_width_spin: Optional[QSpinBox] = None
+        self.ai_height_spin: Optional[QSpinBox] = None
+        self.ai_num_images_spin: Optional[QSpinBox] = None
+        self.ai_seed_spin: Optional[QSpinBox] = None
+        self.ai_preview_grid: Optional[QGridLayout] = None
+        self.ai_generate_btn: Optional[QPushButton] = None
 
         # Improve overall UI appearance
         self.improve_ui_styling()
@@ -186,6 +310,11 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         self.exportMapBtn: Optional[Any] = None
         self.load_values()
         self.add_extra_controls()
+
+        # Setup AI Generation tab if available
+        if AI_AVAILABLE:
+            self.setup_ai_generation_tab()
+            self.setup_config_tab()
 
         # Use timer to add tick labels after UI is fully rendered
         QTimer.singleShot(100, self.add_tick_labels)
@@ -418,7 +547,7 @@ class WatermarkWizard(QtWidgets.QMainWindow):
 
             # Simple styling without font CSS
             label_style = """
-                color: #333; 
+                color: #333;
                 margin-bottom: 4px;
                 padding: 2px;
             """
@@ -888,20 +1017,20 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         collision_combo = getattr(self, "collisionCombo", None)
         if collision_combo:
             self.config["collision_strategy"] = collision_combo.currentText()
-        
+
         # Slug prefix and location from UI fields
         slug_prefix_edit = getattr(self, "slugPrefixEdit", None)
         if slug_prefix_edit:
             self.config["slug_prefix"] = slug_prefix_edit.text().strip()
         else:
             self.config.setdefault("slug_prefix", "")
-            
+
         slug_location_edit = getattr(self, "slugLocationEdit", None)
         if slug_location_edit:
             self.config["slug_location"] = slug_location_edit.text().strip()
         else:
             self.config.setdefault("slug_location", "")
-        
+
         # Optional advanced fields (keep if already present)
         self.config.setdefault("slug_max_words", 6)
         self.config.setdefault("slug_min_len", 3)
@@ -955,7 +1084,7 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             self.slugPrefixEdit = QLineEdit(host)
             self.slugPrefixEdit.setText(self.config.get("slug_prefix", ""))
             self.slugPrefixEdit.setPlaceholderText("e.g., send-out-cards, company-name")
-            
+
             self.slugLocationLabel = QLabel("Slug Location:", host)
             self.slugLocationEdit = QLineEdit(host)
             self.slugLocationEdit.setText(self.config.get("slug_location", ""))
@@ -964,24 +1093,36 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             self.previewSeoBtn = QPushButton("Preview SEO Names", host)
             self.exportMapBtn = QPushButton("Export Mapping CSV", host)
 
-            # Insert before Run button when we can; otherwise append
-            run_index = None
+            # Insert before Preview button when we can; otherwise append
+            preview_index = None
             if isinstance(layout, QBoxLayout):
+                for i in range(layout.count()):
+                    item = layout.itemAt(i)
+                    if item and item.widget() is self.ui.previewBtn:
+                        preview_index = i
+                        break
+                if preview_index is None:
+                    preview_index = layout.count()
+                # Insert slug controls before preview button
+                layout.insertWidget(preview_index, self.slugPrefixLabel)
+                layout.insertWidget(preview_index + 1, self.slugPrefixEdit)
+                layout.insertWidget(preview_index + 2, self.slugLocationLabel)
+                layout.insertWidget(preview_index + 3, self.slugLocationEdit)
+                layout.insertWidget(preview_index + 4, self.previewSeoBtn)
+                layout.insertWidget(preview_index + 5, self.exportMapBtn)
+                # Insert other controls after run button
+                run_index = None
                 for i in range(layout.count()):
                     item = layout.itemAt(i)
                     if item and item.widget() is self.ui.runBtn:
                         run_index = i
                         break
-                if run_index is None:
-                    run_index = layout.count()
-                layout.insertWidget(run_index, self.slugPrefixLabel)
-                layout.insertWidget(run_index + 1, self.slugPrefixEdit)
-                layout.insertWidget(run_index + 2, self.slugLocationLabel)
-                layout.insertWidget(run_index + 3, self.slugLocationEdit)
-                layout.insertWidget(run_index + 4, self.previewSeoBtn)
-                layout.insertWidget(run_index + 5, self.exportMapBtn)
-                layout.insertWidget(run_index + 6, self.collisionCombo)
-                layout.insertWidget(run_index + 7, self.recursiveCheck)
+                if run_index is not None:
+                    layout.insertWidget(run_index, self.collisionCombo)
+                    layout.insertWidget(run_index + 1, self.recursiveCheck)
+                else:
+                    layout.addWidget(self.collisionCombo)
+                    layout.addWidget(self.recursiveCheck)
             else:
                 # Generic layouts (QGridLayout/QFormLayout/unknown): just append
                 for w in (
@@ -1206,6 +1347,699 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             from PyQt6.QtWidgets import QMessageBox
 
             QMessageBox.critical(self, "Export Mapping", f"Error: {e}")
+
+    def setup_ai_generation_tab(self) -> None:
+        """Setup AI Image Generation tab"""
+        try:
+            # Create tab widget if not exists
+            if not hasattr(self, "ai_tab_widget") or self.ai_tab_widget is None:
+                # Get the main vertical layout
+                from PyQt6.QtWidgets import QVBoxLayout as VBoxLayout
+
+                main_layout = self.centralWidget().layout()
+                if not main_layout or not isinstance(main_layout, VBoxLayout):
+                    print("Error: No main layout found or not QVBoxLayout")
+                    return
+
+                # Create tab widget
+                self.ai_tab_widget = QTabWidget()
+
+                # Create Watermark tab widget
+                watermark_tab = QWidget()
+                watermark_layout = QVBoxLayout(watermark_tab)
+
+                # Move existing formLayout to watermark tab
+                if hasattr(self.ui, "formLayout"):
+                    # Remove formLayout from main layout
+                    main_layout.removeItem(self.ui.formLayout)
+                    watermark_layout.addLayout(self.ui.formLayout)
+
+                # Move preview and run buttons to watermark tab
+                if hasattr(self.ui, "previewBtn"):
+                    main_layout.removeWidget(self.ui.previewBtn)
+                    watermark_layout.addWidget(self.ui.previewBtn)
+
+                if hasattr(self.ui, "runBtn"):
+                    main_layout.removeWidget(self.ui.runBtn)
+                    watermark_layout.addWidget(self.ui.runBtn)
+
+                # Add watermark tab as first tab
+                self.ai_tab_widget.addTab(watermark_tab, "Watermark")
+
+                # Add tab widget to main layout at the top (position 0)
+                main_layout.insertWidget(0, self.ai_tab_widget)
+
+            # Create AI Generation tab
+            ai_widget = QWidget()
+            ai_layout = QVBoxLayout(ai_widget)
+
+            # Provider Selection Group
+            provider_group = QGroupBox("Provider Selection")
+            provider_layout = QVBoxLayout()
+
+            provider_label = QLabel("AI Provider:")
+            self.ai_provider_combo = QComboBox()
+            self.ai_provider_combo.addItems(["fal", "ideogram", "stability"])
+            self.ai_provider_combo.setToolTip("Select AI image generation provider")
+
+            provider_layout.addWidget(provider_label)
+            provider_layout.addWidget(self.ai_provider_combo)
+            provider_group.setLayout(provider_layout)
+            ai_layout.addWidget(provider_group)
+
+            # Prompt Group
+            prompt_group = QGroupBox("Image Generation")
+            prompt_layout = QVBoxLayout()
+
+            # Prompt
+            prompt_label = QLabel("Prompt (describe the image):")
+            self.ai_prompt_text = QTextEdit()
+            self.ai_prompt_text.setPlaceholderText(
+                "Example: A professional business card with modern design..."
+            )
+            self.ai_prompt_text.setMaximumHeight(100)
+
+            # Negative Prompt
+            neg_prompt_label = QLabel("Negative Prompt (what to avoid):")
+            self.ai_negative_prompt_text = QTextEdit()
+            self.ai_negative_prompt_text.setPlaceholderText(
+                "Example: blurry, low quality, distorted..."
+            )
+            self.ai_negative_prompt_text.setMaximumHeight(60)
+
+            prompt_layout.addWidget(prompt_label)
+            prompt_layout.addWidget(self.ai_prompt_text)
+            prompt_layout.addWidget(neg_prompt_label)
+            prompt_layout.addWidget(self.ai_negative_prompt_text)
+            prompt_group.setLayout(prompt_layout)
+            ai_layout.addWidget(prompt_group)
+
+            # Parameters Group
+            params_group = QGroupBox("Generation Parameters")
+            params_layout = QGridLayout()
+
+            # Width
+            params_layout.addWidget(QLabel("Width:"), 0, 0)
+            self.ai_width_spin = QSpinBox()
+            self.ai_width_spin.setRange(256, 2048)
+            self.ai_width_spin.setValue(1024)
+            self.ai_width_spin.setSingleStep(64)
+            params_layout.addWidget(self.ai_width_spin, 0, 1)
+
+            # Height
+            params_layout.addWidget(QLabel("Height:"), 0, 2)
+            self.ai_height_spin = QSpinBox()
+            self.ai_height_spin.setRange(256, 2048)
+            self.ai_height_spin.setValue(1024)
+            self.ai_height_spin.setSingleStep(64)
+            params_layout.addWidget(self.ai_height_spin, 0, 3)
+
+            # Number of images
+            params_layout.addWidget(QLabel("Number of Images:"), 1, 0)
+            self.ai_num_images_spin = QSpinBox()
+            self.ai_num_images_spin.setRange(1, 4)
+            self.ai_num_images_spin.setValue(1)
+            params_layout.addWidget(self.ai_num_images_spin, 1, 1)
+
+            # Seed
+            params_layout.addWidget(QLabel("Seed (0 = random):"), 1, 2)
+            self.ai_seed_spin = QSpinBox()
+            self.ai_seed_spin.setRange(0, 999999)
+            self.ai_seed_spin.setValue(0)
+            params_layout.addWidget(self.ai_seed_spin, 1, 3)
+
+            params_group.setLayout(params_layout)
+            ai_layout.addWidget(params_group)
+
+            # Generate Button
+            self.ai_generate_btn = QPushButton("Generate Images")
+            self.ai_generate_btn.setMinimumHeight(40)
+            self.ai_generate_btn.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #0078d4;
+                    color: white;
+                    font-size: 12pt;
+                    font-weight: bold;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #106ebe;
+                }
+                QPushButton:pressed {
+                    background-color: #005a9e;
+                }
+                QPushButton:disabled {
+                    background-color: #cccccc;
+                    color: #666666;
+                }
+            """
+            )
+            self.ai_generate_btn.clicked.connect(self.generate_ai_images)
+            ai_layout.addWidget(self.ai_generate_btn)
+
+            # Preview Area
+            preview_group = QGroupBox("Generated Images")
+            preview_layout = QVBoxLayout()
+
+            # Scroll area for image grid
+            scroll_area = QScrollArea()
+            scroll_area.setWidgetResizable(True)
+            scroll_widget = QWidget()
+            self.ai_preview_grid = QGridLayout(scroll_widget)
+            scroll_area.setWidget(scroll_widget)
+
+            preview_layout.addWidget(scroll_area)
+            preview_group.setLayout(preview_layout)
+            ai_layout.addWidget(preview_group)
+
+            # Add AI tab to tab widget
+            if self.ai_tab_widget:
+                self.ai_tab_widget.addTab(ai_widget, "AI Generation")
+
+            print("AI Generation tab setup complete")
+
+        except Exception as e:
+            print(f"Error setting up AI Generation tab: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    def setup_config_tab(self) -> None:
+        """Setup Configuration tab for API keys and settings"""
+        try:
+            if not self.ai_tab_widget:
+                print("Error: Tab widget not initialized")
+                return
+
+            # Create Config tab
+            config_widget = QWidget()
+            config_layout = QVBoxLayout(config_widget)
+
+            # Scroll area for all config controls
+            scroll_area = QScrollArea()
+            scroll_area.setWidgetResizable(True)
+            scroll_content = QWidget()
+            scroll_layout = QVBoxLayout(scroll_content)
+
+            # === AI Provider API Keys Section ===
+            api_keys_group = QGroupBox("AI Provider API Keys")
+            api_keys_layout = QGridLayout()
+
+            # Fal.ai API Key
+            api_keys_layout.addWidget(QLabel("Fal.ai API Key:"), 0, 0)
+            self.fal_api_key_edit = QLineEdit()
+            self.fal_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            self.fal_api_key_edit.setPlaceholderText("Enter your Fal.ai API key")
+            api_keys_layout.addWidget(self.fal_api_key_edit, 0, 1)
+
+            self.fal_show_key_btn = QPushButton("Show")
+            self.fal_show_key_btn.setCheckable(True)
+            self.fal_show_key_btn.setMaximumWidth(60)
+            self.fal_show_key_btn.clicked.connect(
+                lambda: self._toggle_password_visibility(
+                    self.fal_api_key_edit, self.fal_show_key_btn
+                )
+            )
+            api_keys_layout.addWidget(self.fal_show_key_btn, 0, 2)
+
+            # Ideogram API Key
+            api_keys_layout.addWidget(QLabel("Ideogram API Key:"), 1, 0)
+            self.ideogram_api_key_edit = QLineEdit()
+            self.ideogram_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            self.ideogram_api_key_edit.setPlaceholderText("Enter your Ideogram API key")
+            api_keys_layout.addWidget(self.ideogram_api_key_edit, 1, 1)
+
+            self.ideogram_show_key_btn = QPushButton("Show")
+            self.ideogram_show_key_btn.setCheckable(True)
+            self.ideogram_show_key_btn.setMaximumWidth(60)
+            self.ideogram_show_key_btn.clicked.connect(
+                lambda: self._toggle_password_visibility(
+                    self.ideogram_api_key_edit, self.ideogram_show_key_btn
+                )
+            )
+            api_keys_layout.addWidget(self.ideogram_show_key_btn, 1, 2)
+
+            # Stability AI API Key
+            api_keys_layout.addWidget(QLabel("Stability AI API Key:"), 2, 0)
+            self.stability_api_key_edit = QLineEdit()
+            self.stability_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            self.stability_api_key_edit.setPlaceholderText(
+                "Enter your Stability AI API key"
+            )
+            api_keys_layout.addWidget(self.stability_api_key_edit, 2, 1)
+
+            self.stability_show_key_btn = QPushButton("Show")
+            self.stability_show_key_btn.setCheckable(True)
+            self.stability_show_key_btn.setMaximumWidth(60)
+            self.stability_show_key_btn.clicked.connect(
+                lambda: self._toggle_password_visibility(
+                    self.stability_api_key_edit, self.stability_show_key_btn
+                )
+            )
+            api_keys_layout.addWidget(self.stability_show_key_btn, 2, 2)
+
+            api_keys_group.setLayout(api_keys_layout)
+            scroll_layout.addWidget(api_keys_group)
+
+            # === Application Settings Section ===
+            app_settings_group = QGroupBox("Application Settings")
+            app_settings_layout = QGridLayout()
+
+            # Note about settings
+            settings_note = QLabel(
+                "Note: Most watermark settings are configured in the Watermark tab.\n"
+                "These are advanced configuration options."
+            )
+            settings_note.setStyleSheet("color: #666; font-style: italic;")
+            app_settings_layout.addWidget(settings_note, 0, 0, 1, 2)
+
+            # Add a few key settings
+            row = 1
+            app_settings_layout.addWidget(QLabel("Collision Strategy:"), row, 0)
+            self.config_collision_combo = QComboBox()
+            self.config_collision_combo.addItems(["counter", "timestamp"])
+            app_settings_layout.addWidget(self.config_collision_combo, row, 1)
+
+            row += 1
+            app_settings_layout.addWidget(QLabel("Process Subfolders:"), row, 0)
+            self.config_recursive_check = QCheckBox()
+            app_settings_layout.addWidget(self.config_recursive_check, row, 1)
+
+            app_settings_group.setLayout(app_settings_layout)
+            scroll_layout.addWidget(app_settings_group)
+
+            # Add stretch to push everything to top
+            scroll_layout.addStretch()
+
+            scroll_area.setWidget(scroll_content)
+            config_layout.addWidget(scroll_area)
+
+            # === Save Configuration Button ===
+            save_config_btn = QPushButton("Save Configuration")
+            save_config_btn.setMinimumHeight(40)
+            save_config_btn.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #28a745;
+                    color: white;
+                    font-size: 11pt;
+                    font-weight: bold;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #218838;
+                }
+                QPushButton:pressed {
+                    background-color: #1e7e34;
+                }
+            """
+            )
+            save_config_btn.clicked.connect(self.save_configuration)
+            config_layout.addWidget(save_config_btn)
+
+            # Add Config tab to tab widget
+            self.ai_tab_widget.addTab(config_widget, "Configuration")
+
+            # Load existing configuration
+            self._load_config_tab_values()
+
+            print("Configuration tab setup complete")
+
+        except Exception as e:
+            print(f"Error setting up Configuration tab: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    def _toggle_password_visibility(
+        self, line_edit: QLineEdit, button: QPushButton
+    ) -> None:
+        """Toggle password visibility in a QLineEdit"""
+        if button.isChecked():
+            line_edit.setEchoMode(QLineEdit.EchoMode.Normal)
+            button.setText("Hide")
+        else:
+            line_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            button.setText("Show")
+
+    def _load_config_tab_values(self) -> None:
+        """Load current configuration values into Config tab"""
+        try:
+            # Load API keys from providers.yaml if it exists
+            import os
+            import yaml
+
+            providers_file = "config/providers.yaml"
+            if os.path.exists(providers_file):
+                with open(providers_file, "r") as f:
+                    providers_config = yaml.safe_load(f)
+                    if providers_config and "providers" in providers_config:
+                        providers = providers_config["providers"]
+
+                        # Fal.ai
+                        if "fal" in providers and "credentials" in providers["fal"]:
+                            fal_key = providers["fal"]["credentials"].get("api_key", "")
+                            self.fal_api_key_edit.setText(fal_key)
+
+                        # Ideogram
+                        if (
+                            "ideogram" in providers
+                            and "credentials" in providers["ideogram"]
+                        ):
+                            ideogram_key = providers["ideogram"]["credentials"].get(
+                                "api_key", ""
+                            )
+                            self.ideogram_api_key_edit.setText(ideogram_key)
+
+                        # Stability AI
+                        if (
+                            "stability" in providers
+                            and "credentials" in providers["stability"]
+                        ):
+                            stability_key = providers["stability"]["credentials"].get(
+                                "api_key", ""
+                            )
+                            self.stability_api_key_edit.setText(stability_key)
+
+            # Load app settings
+            collision = self.config.get("collision_strategy", "counter")
+            idx = self.config_collision_combo.findText(collision)
+            if idx >= 0:
+                self.config_collision_combo.setCurrentIndex(idx)
+
+            self.config_recursive_check.setChecked(
+                bool(self.config.get("process_recursive", False))
+            )
+
+        except Exception as e:
+            print(f"Error loading config tab values: {e}")
+
+    def save_configuration(self) -> None:
+        """Save configuration from Config tab"""
+        try:
+            import os
+            import yaml
+
+            # === Save API Keys to providers.yaml ===
+            providers_file = "config/providers.yaml"
+            providers_config: dict[str, Any] = {"providers": {}}
+
+            # Fal.ai
+            fal_key = self.fal_api_key_edit.text().strip()
+            if fal_key:
+                providers_config["providers"]["fal"] = {
+                    "credentials": {"api_key": fal_key}
+                }
+
+            # Ideogram
+            ideogram_key = self.ideogram_api_key_edit.text().strip()
+            if ideogram_key:
+                providers_config["providers"]["ideogram"] = {
+                    "credentials": {"api_key": ideogram_key}
+                }
+
+            # Stability AI
+            stability_key = self.stability_api_key_edit.text().strip()
+            if stability_key:
+                providers_config["providers"]["stability"] = {
+                    "credentials": {"api_key": stability_key}
+                }
+
+            # Save providers.yaml
+            os.makedirs("config", exist_ok=True)
+            with open(providers_file, "w") as f:
+                yaml.dump(providers_config, f, default_flow_style=False)
+
+            # === Save app settings to config ===
+            self.config["collision_strategy"] = (
+                self.config_collision_combo.currentText()
+            )
+            self.config["process_recursive"] = self.config_recursive_check.isChecked()
+            save_config(self.config)
+
+            QMessageBox.information(
+                self,
+                "Configuration Saved",
+                "Configuration has been saved successfully!\n\n"
+                "API keys: config/providers.yaml\n"
+                "Settings: config/settings.json",
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Save Error", f"Failed to save configuration: {str(e)}"
+            )
+
+    def generate_ai_images(self) -> None:
+        """Start AI image generation"""
+        try:
+            if not AI_AVAILABLE:
+                QMessageBox.warning(
+                    self,
+                    "AI Not Available",
+                    "AI generation modules are not installed or configured.",
+                )
+                return
+
+            if self.ai_thread and self.ai_thread.isRunning():
+                QMessageBox.information(
+                    self,
+                    "Generation in Progress",
+                    "AI image generation is already running!",
+                )
+                return
+
+            # Validate inputs
+            if not self.ai_prompt_text or not self.ai_prompt_text.toPlainText().strip():
+                QMessageBox.warning(
+                    self,
+                    "Missing Prompt",
+                    "Please enter a prompt describing the image you want to generate.",
+                )
+                return
+
+            # Get parameters
+            provider = (
+                self.ai_provider_combo.currentText()
+                if self.ai_provider_combo
+                else "fal"
+            )
+            prompt = self.ai_prompt_text.toPlainText().strip()
+            negative_prompt = (
+                self.ai_negative_prompt_text.toPlainText().strip()
+                if self.ai_negative_prompt_text
+                else ""
+            )
+            width = self.ai_width_spin.value() if self.ai_width_spin else 1024
+            height = self.ai_height_spin.value() if self.ai_height_spin else 1024
+            num_images = (
+                self.ai_num_images_spin.value() if self.ai_num_images_spin else 1
+            )
+            seed = self.ai_seed_spin.value() if self.ai_seed_spin else None
+            if seed == 0:
+                seed = None
+
+            # Disable generate button
+            if self.ai_generate_btn:
+                self.ai_generate_btn.setEnabled(False)
+                self.ai_generate_btn.setText("Generating...")
+
+            # Create progress dialog
+            self.progress_dialog = QProgressDialog(
+                "Initializing AI generation...", "Cancel", 0, 0, self
+            )
+            self.progress_dialog.setWindowTitle("Generating Images")
+            self.progress_dialog.setModal(True)
+            self.progress_dialog.show()
+
+            # Create and start AI generation thread
+            self.ai_thread = AIGenerationThread(
+                provider_name=provider,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                width=width,
+                height=height,
+                num_images=num_images,
+                seed=seed,
+            )
+            self.ai_thread.finished.connect(self.on_ai_generation_finished)
+            self.ai_thread.error.connect(self.on_ai_generation_error)
+            self.ai_thread.progress.connect(self.on_ai_generation_progress)
+            self.ai_thread.start()
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Generation Error", f"Failed to start generation: {str(e)}"
+            )
+            if self.ai_generate_btn:
+                self.ai_generate_btn.setEnabled(True)
+                self.ai_generate_btn.setText("Generate Images")
+
+    def on_ai_generation_progress(self, message: str) -> None:
+        """Handle AI generation progress updates"""
+        if self.progress_dialog:
+            self.progress_dialog.setLabelText(message)
+        print(f"AI Generation Progress: {message}")
+
+    def on_ai_generation_finished(self, images: List[Image.Image]) -> None:
+        """Handle successful AI image generation"""
+        if self.ai_generate_btn:
+            self.ai_generate_btn.setEnabled(True)
+            self.ai_generate_btn.setText("Generate Images")
+
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+
+        # Store generated images
+        self.generated_images = images
+
+        # Display images in preview grid
+        self.display_generated_images(images)
+
+        QMessageBox.information(
+            self,
+            "Generation Complete",
+            f"Successfully generated {len(images)} image(s)!",
+        )
+
+    def on_ai_generation_error(self, error_msg: str) -> None:
+        """Handle AI generation errors"""
+        if self.ai_generate_btn:
+            self.ai_generate_btn.setEnabled(True)
+            self.ai_generate_btn.setText("Generate Images")
+
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+
+        QMessageBox.critical(
+            self, "Generation Failed", f"AI image generation failed:\n\n{error_msg}"
+        )
+
+    def display_generated_images(self, images: List[Image.Image]) -> None:
+        """Display generated images in preview grid"""
+        try:
+            if not self.ai_preview_grid:
+                return
+
+            # Clear existing preview
+            while self.ai_preview_grid.count():
+                item = self.ai_preview_grid.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+
+            # Display images in grid (2 columns)
+            for idx, img in enumerate(images):
+                row = idx // 2
+                col = idx % 2
+
+                # Create image label
+                img_label = QLabel()
+
+                # Convert PIL to QPixmap
+                img_bytes = io.BytesIO()
+                img.save(img_bytes, format="PNG")
+                img_bytes.seek(0)
+                pix = QPixmap()
+                pix.loadFromData(img_bytes.getvalue())
+
+                # Scale to reasonable size
+                pix = pix.scaled(400, 400, Qt.AspectRatioMode.KeepAspectRatio)
+                img_label.setPixmap(pix)
+                img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                # Create container with save button
+                container = QWidget()
+                container_layout = QVBoxLayout(container)
+                container_layout.addWidget(img_label)
+
+                # Save button
+                save_btn = QPushButton(f"Save Image {idx + 1}")
+                save_btn.clicked.connect(
+                    lambda checked, i=idx: self.save_generated_image(i)
+                )
+                container_layout.addWidget(save_btn)
+
+                # Send to watermark button
+                watermark_btn = QPushButton("Send to Watermark")
+                watermark_btn.clicked.connect(
+                    lambda checked, i=idx: self.send_to_watermark(i)
+                )
+                container_layout.addWidget(watermark_btn)
+
+                self.ai_preview_grid.addWidget(container, row, col)
+
+            print(f"Displayed {len(images)} generated images")
+
+        except Exception as e:
+            print(f"Error displaying images: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    def save_generated_image(self, index: int) -> None:
+        """Save a generated image to file"""
+        try:
+            if index >= len(self.generated_images):
+                return
+
+            img = self.generated_images[index]
+
+            # Get save location
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save Generated Image",
+                os.path.join(os.getcwd(), f"ai_generated_{index + 1}.png"),
+                "PNG Files (*.png);;JPEG Files (*.jpg);;All Files (*.*)",
+            )
+
+            if file_path:
+                img.save(file_path)
+                QMessageBox.information(
+                    self, "Image Saved", f"Image saved to:\n{file_path}"
+                )
+
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", f"Failed to save image: {str(e)}")
+
+    def send_to_watermark(self, index: int) -> None:
+        """Send generated image to input directory for watermarking"""
+        try:
+            if index >= len(self.generated_images):
+                return
+
+            img = self.generated_images[index]
+
+            # Get input directory from config
+            input_dir = self.config.get("input_dir", "")
+            if not input_dir or not os.path.isdir(input_dir):
+                QMessageBox.warning(
+                    self,
+                    "Input Directory Not Set",
+                    "Please set an input directory first in the Watermark tab.",
+                )
+                return
+
+            # Generate filename
+            timestamp = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"ai_generated_{timestamp}_{index + 1}.png"
+            file_path = os.path.join(input_dir, filename)
+
+            # Save image
+            img.save(file_path)
+
+            QMessageBox.information(
+                self,
+                "Image Added",
+                f"Image saved to input directory:\n{filename}\n\nYou can now apply watermark to it.",
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error", f"Failed to send image to watermark: {str(e)}"
+            )
 
 
 if __name__ == "__main__":

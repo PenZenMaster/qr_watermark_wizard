@@ -1,9 +1,9 @@
 # 🧠 QR Watermark Wizard – Project Enhancement Plan
 
-**Author:** George Penzenik – Rank Rocket Co  
-**Version:** v1.07.31 (UI) / v1.07.15 (Engine)  
-**Updated:** 2025-08-25  
-**Status:** Production Ready → Enhancement Phase
+**Author:** George Penzenik – Rank Rocket Co
+**Version:** v2.0.0 (Application-wide - Semantic Versioning)
+**Updated:** 2025-12-24
+**Status:** Development Branch - AI Image Generation Feature
 
 ---
 
@@ -38,7 +38,7 @@
 
 ## 🔹 main_ui.py — UI Controller
 
-**Role:**  
+**Role:**
 Main PyQt6 GUI that coordinates watermarking logic and config I/O.
 
 **Responsibilities:**
@@ -58,7 +58,7 @@ Main PyQt6 GUI that coordinates watermarking logic and config I/O.
 
 ## 🔹 qr_watermark.py — Watermark Engine
 
-**Role:**  
+**Role:**
 Adds branded overlays to images using PIL.
 
 **Responsibilities:**
@@ -78,7 +78,7 @@ Adds branded overlays to images using PIL.
 
 ## 🔹 rename_img.py — Slug Engine
 
-**Role:**  
+**Role:**
 Converts long/ugly filenames into short, SEO-optimized slugs.
 
 **Responsibilities:**
@@ -93,7 +93,7 @@ Converts long/ugly filenames into short, SEO-optimized slugs.
 
 **Function:**
 ```python
-seo_friendly_name("IMG_20230816_pxl_final-edit") 
+seo_friendly_name("IMG_20230816_pxl_final-edit")
 → "brand-location-widget.jpg"
 ```
 
@@ -124,7 +124,7 @@ flowchart TD
 
 ## 🚀 Enhancement Opportunities for Next Development Phase
 
-### 🎯 PRIORITY 1: AI Image Generation Integration 
+### 🎯 PRIORITY 1: AI Image Generation Integration
 
 **Requested Enhancement:** Full AI-powered image generation workflow before watermarking
 
@@ -135,7 +135,7 @@ flowchart TD
 - **Revision Loop**: Request refinements for rejected images with modified prompts
 - **Auto-Input Pipeline**: Accepted images automatically moved to `input_images/` folder
 
-**Architecture Approach:** 
+**Architecture Approach:**
 - **Compatible with Current Stack**: Extend existing PyQt6 interface with new tabs/dialogs
 - **New Module**: `image_generation.py` - API connector and generation manager
 - **UI Extension**: Add "Generate Images" tab to existing `WatermarkWizard` window
@@ -162,7 +162,7 @@ flowchart TD
 
 ## 🛠️ Implementation Roadmap: AI Image Generation
 
-### Phase 1: 
+### Phase 1:
 ## 🛠️ Technical Debt & Maintenance
 
 
@@ -180,7 +180,7 @@ flowchart TD
 
 ## 🎯 Success Metrics
 
-**Current State:** Stable production tool with professional UI  
+**Current State:** Stable production tool with professional UI
 **AI Enhancement Goals:**
 - **Generation Integration**: Support 3+ AI image generation providers (OpenAI, Claude MCP, Stable Diffusion)
 - **User Workflow**: Complete generate → review → revise → accept → watermark pipeline
@@ -190,15 +190,15 @@ flowchart TD
 **Existing Enhancement Goals:**
 - 50% faster batch processing through optimization
 - Support 5+ output formats beyond JPG
-- Template system supporting 10+ client configurations  
+- Template system supporting 10+ client configurations
 - API capability for automated workflows
 
 ---
 
 ## ✨ Development Team
 
-**Lead Engineer:** George Penzenik (Rank Rocket Co)  
-**Documentation & Architecture:** George Penzenik  
+**Lead Engineer:** George Penzenik (Rank Rocket Co)
+**Documentation & Architecture:** George Penzenik
 **Quality Assurance:** Python toolchain (ruff, black, mypy, pytest)
 
 ---
@@ -570,4 +570,3 @@ Write `manifest.json` per run:
 ### Priority 4 (UI/UX Enhancements)
 - "Recent Projects" becomes recent profile list (multi-client)
 - "Generate Images" tab writes images into `generation_output_dir` and can optionally auto-run pipeline
-

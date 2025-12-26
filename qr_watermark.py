@@ -15,11 +15,12 @@ Last Modified Date:
 08-01-2025
 
 Version:
-v1.07.15
+v2.0.0
 
 Comments:
-- v1.07.14: Fixed output file extensions - PNG inputs now properly save as .jpg files.
+- v2.0.0: Major version bump for AI image generation feature development. Added comprehensive unit testing framework.
 - v1.07.15: Added SEO-friendly filename option.
+- v1.07.14: Fixed output file extensions - PNG inputs now properly save as .jpg files.
 """
 
 from typing import Optional
@@ -171,7 +172,7 @@ def apply_watermark(
         try:
             font = ImageFont.truetype("arial.ttf", font_size)
         except IOError:
-            font = ImageFont.load_default()
+            font = ImageFont.load_default()  # type: ignore[assignment]
         lines = TEXT_OVERLAY.splitlines()
         total_height = sum(
             font.getbbox(line)[3] - font.getbbox(line)[1] for line in lines
@@ -206,7 +207,7 @@ def apply_watermark(
             save_kwargs["exif"] = exif_bytes
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
-        base_img.convert("RGB").save(output_path, "JPEG", **save_kwargs)
+        base_img.convert("RGB").save(output_path, "JPEG", **save_kwargs)  # type: ignore[arg-type]
         print(f"[SUCCESS] Processed: {output_path}")
     except Exception as e:
         error_msg = f"[ERROR] Error processing {image_path}: {e}"

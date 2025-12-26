@@ -1,0 +1,75 @@
+# Pre-commit hooks for QR Watermark Wizard
+# Install: pip install pre-commit
+# Setup: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Ruff - Fast Python linter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        name: Ruff linter
+
+  # Black - Python code formatter
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+        name: Black formatter
+        language_version: python3
+
+  # MyPy - Static type checker
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.1
+    hooks:
+      - id: mypy
+        name: MyPy type checker
+        additional_dependencies: [types-Pillow, types-PyYAML, types-requests]
+        args: [--ignore-missing-imports, --no-strict-optional]
+        exclude: ^(tests/|\.venv/)
+
+  # Pytest - Run tests before commit
+  - repo: local
+    hooks:
+      - id: pytest
+        name: Pytest - Run unit tests
+        entry: pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        args: [tests/, -q, --tb=short]
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+      - id: check-json
+        name: Check JSON syntax
+        exclude: ^config/settings\.json$  # Excluded since it's gitignored
+      - id: check-added-large-files
+        name: Check for large files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: check-case-conflict
+        name: Check for case conflicts
+
+  # Additional security checks
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        name: Bandit security linter
+        args: [-ll]
+        exclude: ^tests/
+
+# Configuration
+fail_fast: false  # Run all hooks even if one fails

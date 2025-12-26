@@ -6,10 +6,9 @@ Tests QR generation, watermarking, configuration, and file handling.
 
 import os
 import json
-import tempfile
 import pytest
 from PIL import Image
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from qr_watermark import (
     ensure_unique_path,
     load_config,
@@ -197,7 +196,9 @@ class TestWatermarkApplication:
 
         return str(config_file)
 
-    def test_apply_watermark_returns_image_in_preview_mode(self, sample_image, test_config):
+    def test_apply_watermark_returns_image_in_preview_mode(
+        self, sample_image, test_config
+    ):
         """Test apply_watermark returns PIL Image in preview mode."""
         from qr_watermark import apply_watermark
 
@@ -258,11 +259,13 @@ class TestFileFormatHandling:
     @pytest.fixture
     def create_test_image(self, tmp_path):
         """Factory to create test images in different formats."""
+
         def _create(format_name, extension):
             img_path = tmp_path / f"test.{extension}"
             img = Image.new("RGB", (400, 300), color=(100, 150, 200))
             img.save(img_path, format_name)
             return str(img_path)
+
         return _create
 
     def test_jpg_input_processed(self, create_test_image):
@@ -341,11 +344,14 @@ class TestEdgeCases:
         assert loaded.size[0] > loaded.size[1]  # Width > Height
 
 
-@pytest.mark.parametrize("qr_size_ratio,expected_min_size", [
-    (0.10, 40),   # 10% of 400px height = 40px
-    (0.15, 60),   # 15% of 400px height = 60px
-    (0.20, 80),   # 20% of 400px height = 80px
-])
+@pytest.mark.parametrize(
+    "qr_size_ratio,expected_min_size",
+    [
+        (0.10, 40),  # 10% of 400px height = 40px
+        (0.15, 60),  # 15% of 400px height = 60px
+        (0.20, 80),  # 20% of 400px height = 80px
+    ],
+)
 def test_qr_size_scaling(qr_size_ratio, expected_min_size):
     """Test QR code scales correctly with different ratios."""
     # Test that QR size calculation works correctly

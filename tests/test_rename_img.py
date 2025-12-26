@@ -176,7 +176,9 @@ class TestMeaningfulnessFilter:
         """Test mixed alphanumeric with more letters than digits."""
         assert _is_meaningful("photo1", 3)  # 5 letters >= 1 digit: meaningful
         assert _is_meaningful("1photo", 3)  # 5 letters >= 1 digit: meaningful
-        assert _is_meaningful("123abc", 3)  # 3 letters >= 3 digits: meaningful (equal counts pass)
+        assert _is_meaningful(
+            "123abc", 3
+        )  # 3 letters >= 3 digits: meaningful (equal counts pass)
         assert not _is_meaningful("1234abc", 3)  # 3 letters < 4 digits: not meaningful
 
 
@@ -235,13 +237,17 @@ class TestConfiguration:
 
     def test_configure_prefix(self):
         """Test prefix configuration prepends to slug."""
-        configure_slug(prefix="best-dumpster-rental", min_len=3, stopwords=[], whitelist=[])
+        configure_slug(
+            prefix="best-dumpster-rental", min_len=3, stopwords=[], whitelist=[]
+        )
         result = seo_friendly_name("tampa-service")
         assert result.startswith("best-dumpster-rental")
 
     def test_configure_location(self):
         """Test location configuration added to slug."""
-        configure_slug(location="Tampa", prefix="", min_len=3, stopwords=[], whitelist=[])
+        configure_slug(
+            location="Tampa", prefix="", min_len=3, stopwords=[], whitelist=[]
+        )
         result = seo_friendly_name("dumpster-rental")
         assert "tampa" in result
 
@@ -252,7 +258,7 @@ class TestConfiguration:
             location="ann-arbor",
             min_len=3,
             stopwords=[],
-            whitelist=[]
+            whitelist=[],
         )
         result = seo_friendly_name("custom-work")
         assert "best" in result and "service" in result
@@ -286,7 +292,9 @@ class TestSlugTokenExtraction:
 
     def test_slug_tokens_with_prefix_location(self):
         """Test prefix and location appear first in token list."""
-        configure_slug(prefix="brand", location="city", min_len=3, stopwords=[], whitelist=[])
+        configure_slug(
+            prefix="brand", location="city", min_len=3, stopwords=[], whitelist=[]
+        )
         tokens = _slug_tokens_from_name("product-name")
         # Prefix/location should appear before content tokens
         first_two = tokens[:2]
@@ -341,12 +349,15 @@ class TestEdgeCases:
         assert "loc2" in result2
 
 
-@pytest.mark.parametrize("input_name,expected_contains", [
-    ("IMG_1234_copper_dormer", ["copper", "dormer"]),
-    ("DSC_2025_custom_finial", ["custom", "finial"]),
-    ("PXL_final_edited_chimney", ["chimney"]),
-    ("screenshot_2025-08-16_work", ["work"]),
-])
+@pytest.mark.parametrize(
+    "input_name,expected_contains",
+    [
+        ("IMG_1234_copper_dormer", ["copper", "dormer"]),
+        ("DSC_2025_custom_finial", ["custom", "finial"]),
+        ("PXL_final_edited_chimney", ["chimney"]),
+        ("screenshot_2025-08-16_work", ["work"]),
+    ],
+)
 def test_real_world_filenames(input_name, expected_contains):
     """Test real-world filename patterns."""
     configure_slug(min_len=3, stopwords=[], whitelist=[])

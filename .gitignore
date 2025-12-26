@@ -61,6 +61,15 @@ secrets.json
 # === RUNTIME CLIENT SETTINGS (changes per client/campaign) ===
 config/settings.json
 
+# === AI PROVIDER CREDENTIALS (never commit API keys) ===
+config/providers.yaml
+
+# === APP SETTINGS (user-specific preferences) ===
+config/app_settings.json
+
+# === CLIENT PROFILES (may contain sensitive paths/settings) ===
+config/profiles/*.yaml
+
 # === PIP REQUIREMENTS ===
 pip-log.txt
 pip-delete-this-directory.txt

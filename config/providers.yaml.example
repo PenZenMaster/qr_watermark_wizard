@@ -1,0 +1,35 @@
+# Provider API Credentials Configuration
+# Copy this file to 'providers.yaml' and fill in your API keys
+# IMPORTANT: providers.yaml is gitignored - never commit API keys
+
+# Fal.ai Provider (Primary - fast, cost-effective)
+# Get your API key at: https://fal.ai/dashboard/keys
+fal:
+  api_key: "YOUR_FAL_API_KEY_HERE"
+  model: "fal-ai/flux-2-flex"  # Options: fal-ai/flux-2-flex, fal-ai/flux-2/turbo, fal-ai/flux-2-max
+  base_url: "https://api.fal.ai/v1"  # Not currently used by Python client
+
+# Ideogram Provider (Superior text rendering in images - 85-90% accuracy)
+# Get your API key at: https://ideogram.ai/manage-api
+ideogram:
+  api_key: "YOUR_IDEOGRAM_API_KEY_HERE"
+  model: "3.0"  # Options: "3.0", "2.0", "1.0"
+  base_url: "https://api.ideogram.ai/v1"
+
+# Stability AI Provider (Reliable fallback with Stable Diffusion)
+# Get your API key at: https://platform.stability.ai/account/keys
+stability:
+  api_key: "YOUR_STABILITY_API_KEY_HERE"
+  model: "sd3-large-turbo"  # Options: sd3, sd3-turbo, sd3-medium, sd3-large, sd3-large-turbo, ultra
+  base_url: "https://api.stability.ai/v2beta/stable-image/generate"
+
+# AWS S3 for upload
+aws:
+  access_key_id: "YOUR_AWS_ACCESS_KEY_ID_HERE"
+  secret_access_key: "YOUR_AWS_SECRET_ACCESS_KEY_HERE"
+  region: "us-east-1"
+
+# OpenAI (Optional - for future integrations)
+openai:
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  organization: "YOUR_OPENAI_ORG_ID_HERE"

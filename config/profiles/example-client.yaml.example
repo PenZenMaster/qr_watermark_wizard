@@ -1,0 +1,67 @@
+# Example Client Profile
+# Copy this file and rename to create a new client profile
+# File naming: <client-slug>.yaml (e.g., salvo-metal-works.yaml)
+
+profile:
+  name: "Example Client - City Name"
+  slug: "example-client-city"
+  client_id: "example_client"
+  created: "2025-12-24"
+  modified: "2025-12-24"
+
+paths:
+  generation_output_dir: "E:/path/to/client/images/generated"
+  input_dir: "E:/path/to/client/images/original"
+  output_dir: "E:/path/to/client/images/watermarked"
+  archive_dir: "E:/path/to/client/images/archive"
+
+generation:
+  mode: "auto"  # "auto", "manual", or "disabled"
+  count: 4
+  width: 512
+  height: 512
+  style: "photoreal"
+  text_strict: false
+  exact_text: []
+  max_attempts_per_image: 4
+  timeout_seconds: 240
+
+providers:
+  primary: "fal"
+  text_strict_provider: "ideogram"
+  fallback: "stability"
+
+watermark:
+  qr_link: "https://example.com/landing-page"
+  qr_size_ratio: 0.15
+  qr_opacity: 0.85
+  qr_padding_vh_ratio: 0.015
+  text_overlay: "(555) 123-4567"
+  text_color: [255, 255, 255]
+  shadow_color: [0, 0, 0, 128]
+  font_family: "arial"
+  font_size_ratio: 0.05
+  text_padding_bottom_ratio: 0.04
+
+seo_naming:
+  enabled: true
+  process_recursive: false
+  collision_strategy: "counter"
+  slug_prefix: "best"
+  slug_location: "City"
+  slug_max_words: 4
+  slug_min_len: 4
+  slug_stopwords:
+    - "simple"
+    - "basic"
+  slug_whitelist:
+    - "custom"
+    - "premium"
+
+upload:
+  enabled: false
+  provider: "aws_s3"
+  bucket: "my-bucket-name"
+  prefix: "client-name/campaign/"
+  acl: "public-read"
+  cache_control: "public, max-age=31536000, immutable"
