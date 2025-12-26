@@ -3,19 +3,25 @@
 # IMPORTANT: providers.yaml is gitignored - never commit API keys
 
 # Fal.ai Provider (Primary - fast, cost-effective)
+# Get your API key at: https://fal.ai/dashboard/keys
 fal:
   api_key: "YOUR_FAL_API_KEY_HERE"
-  base_url: "https://api.fal.ai/v1"
+  model: "fal-ai/flux-2-flex"  # Options: fal-ai/flux-2-flex, fal-ai/flux-2/turbo, fal-ai/flux-2-max
+  base_url: "https://api.fal.ai/v1"  # Not currently used by Python client
 
-# Ideogram Provider (Text-strict mode for exact text rendering)
+# Ideogram Provider (Superior text rendering in images - 85-90% accuracy)
+# Get your API key at: https://ideogram.ai/manage-api
 ideogram:
   api_key: "YOUR_IDEOGRAM_API_KEY_HERE"
+  model: "3.0"  # Options: "3.0", "2.0", "1.0"
   base_url: "https://api.ideogram.ai/v1"
 
-# Stability AI Provider (Fallback for reliability)
+# Stability AI Provider (Reliable fallback with Stable Diffusion)
+# Get your API key at: https://platform.stability.ai/account/keys
 stability:
   api_key: "YOUR_STABILITY_API_KEY_HERE"
-  base_url: "https://api.stability.ai/v1"
+  model: "sd3-large-turbo"  # Options: sd3, sd3-turbo, sd3-medium, sd3-large, sd3-large-turbo, ultra
+  base_url: "https://api.stability.ai/v2beta/stable-image/generate"
 
 # AWS S3 for upload
 aws:
