@@ -50,6 +50,8 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QGridLayout,
     QTabWidget,
+    QLineEdit,
+    QCheckBox,
 )
 from PyQt6.QtGui import QPixmap, QFont
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer
@@ -312,6 +314,7 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         # Setup AI Generation tab if available
         if AI_AVAILABLE:
             self.setup_ai_generation_tab()
+            self.setup_config_tab()
 
         # Use timer to add tick labels after UI is fully rendered
         QTimer.singleShot(100, self.add_tick_labels)
@@ -1521,6 +1524,272 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             import traceback
 
             traceback.print_exc()
+
+    def setup_config_tab(self) -> None:
+        """Setup Configuration tab for API keys and settings"""
+        try:
+            if not self.ai_tab_widget:
+                print("Error: Tab widget not initialized")
+                return
+
+            # Create Config tab
+            config_widget = QWidget()
+            config_layout = QVBoxLayout(config_widget)
+
+            # Scroll area for all config controls
+            scroll_area = QScrollArea()
+            scroll_area.setWidgetResizable(True)
+            scroll_content = QWidget()
+            scroll_layout = QVBoxLayout(scroll_content)
+
+            # === AI Provider API Keys Section ===
+            api_keys_group = QGroupBox("AI Provider API Keys")
+            api_keys_layout = QGridLayout()
+
+            # Fal.ai API Key
+            api_keys_layout.addWidget(QLabel("Fal.ai API Key:"), 0, 0)
+            self.fal_api_key_edit = QLineEdit()
+            self.fal_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            self.fal_api_key_edit.setPlaceholderText("Enter your Fal.ai API key")
+            api_keys_layout.addWidget(self.fal_api_key_edit, 0, 1)
+
+            self.fal_show_key_btn = QPushButton("Show")
+            self.fal_show_key_btn.setCheckable(True)
+            self.fal_show_key_btn.setMaximumWidth(60)
+            self.fal_show_key_btn.clicked.connect(
+                lambda: self._toggle_password_visibility(
+                    self.fal_api_key_edit, self.fal_show_key_btn
+                )
+            )
+            api_keys_layout.addWidget(self.fal_show_key_btn, 0, 2)
+
+            # Ideogram API Key
+            api_keys_layout.addWidget(QLabel("Ideogram API Key:"), 1, 0)
+            self.ideogram_api_key_edit = QLineEdit()
+            self.ideogram_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            self.ideogram_api_key_edit.setPlaceholderText("Enter your Ideogram API key")
+            api_keys_layout.addWidget(self.ideogram_api_key_edit, 1, 1)
+
+            self.ideogram_show_key_btn = QPushButton("Show")
+            self.ideogram_show_key_btn.setCheckable(True)
+            self.ideogram_show_key_btn.setMaximumWidth(60)
+            self.ideogram_show_key_btn.clicked.connect(
+                lambda: self._toggle_password_visibility(
+                    self.ideogram_api_key_edit, self.ideogram_show_key_btn
+                )
+            )
+            api_keys_layout.addWidget(self.ideogram_show_key_btn, 1, 2)
+
+            # Stability AI API Key
+            api_keys_layout.addWidget(QLabel("Stability AI API Key:"), 2, 0)
+            self.stability_api_key_edit = QLineEdit()
+            self.stability_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            self.stability_api_key_edit.setPlaceholderText(
+                "Enter your Stability AI API key"
+            )
+            api_keys_layout.addWidget(self.stability_api_key_edit, 2, 1)
+
+            self.stability_show_key_btn = QPushButton("Show")
+            self.stability_show_key_btn.setCheckable(True)
+            self.stability_show_key_btn.setMaximumWidth(60)
+            self.stability_show_key_btn.clicked.connect(
+                lambda: self._toggle_password_visibility(
+                    self.stability_api_key_edit, self.stability_show_key_btn
+                )
+            )
+            api_keys_layout.addWidget(self.stability_show_key_btn, 2, 2)
+
+            api_keys_group.setLayout(api_keys_layout)
+            scroll_layout.addWidget(api_keys_group)
+
+            # === Application Settings Section ===
+            app_settings_group = QGroupBox("Application Settings")
+            app_settings_layout = QGridLayout()
+
+            # Note about settings
+            settings_note = QLabel(
+                "Note: Most watermark settings are configured in the Watermark tab.\n"
+                "These are advanced configuration options."
+            )
+            settings_note.setStyleSheet("color: #666; font-style: italic;")
+            app_settings_layout.addWidget(settings_note, 0, 0, 1, 2)
+
+            # Add a few key settings
+            row = 1
+            app_settings_layout.addWidget(QLabel("Collision Strategy:"), row, 0)
+            self.config_collision_combo = QComboBox()
+            self.config_collision_combo.addItems(["counter", "timestamp"])
+            app_settings_layout.addWidget(self.config_collision_combo, row, 1)
+
+            row += 1
+            app_settings_layout.addWidget(QLabel("Process Subfolders:"), row, 0)
+            self.config_recursive_check = QCheckBox()
+            app_settings_layout.addWidget(self.config_recursive_check, row, 1)
+
+            app_settings_group.setLayout(app_settings_layout)
+            scroll_layout.addWidget(app_settings_group)
+
+            # Add stretch to push everything to top
+            scroll_layout.addStretch()
+
+            scroll_area.setWidget(scroll_content)
+            config_layout.addWidget(scroll_area)
+
+            # === Save Configuration Button ===
+            save_config_btn = QPushButton("Save Configuration")
+            save_config_btn.setMinimumHeight(40)
+            save_config_btn.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #28a745;
+                    color: white;
+                    font-size: 11pt;
+                    font-weight: bold;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #218838;
+                }
+                QPushButton:pressed {
+                    background-color: #1e7e34;
+                }
+            """
+            )
+            save_config_btn.clicked.connect(self.save_configuration)
+            config_layout.addWidget(save_config_btn)
+
+            # Add Config tab to tab widget
+            self.ai_tab_widget.addTab(config_widget, "Configuration")
+
+            # Load existing configuration
+            self._load_config_tab_values()
+
+            print("Configuration tab setup complete")
+
+        except Exception as e:
+            print(f"Error setting up Configuration tab: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    def _toggle_password_visibility(
+        self, line_edit: QLineEdit, button: QPushButton
+    ) -> None:
+        """Toggle password visibility in a QLineEdit"""
+        if button.isChecked():
+            line_edit.setEchoMode(QLineEdit.EchoMode.Normal)
+            button.setText("Hide")
+        else:
+            line_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            button.setText("Show")
+
+    def _load_config_tab_values(self) -> None:
+        """Load current configuration values into Config tab"""
+        try:
+            # Load API keys from providers.yaml if it exists
+            import os
+            import yaml
+
+            providers_file = "config/providers.yaml"
+            if os.path.exists(providers_file):
+                with open(providers_file, "r") as f:
+                    providers_config = yaml.safe_load(f)
+                    if providers_config and "providers" in providers_config:
+                        providers = providers_config["providers"]
+
+                        # Fal.ai
+                        if "fal" in providers and "credentials" in providers["fal"]:
+                            fal_key = providers["fal"]["credentials"].get("api_key", "")
+                            self.fal_api_key_edit.setText(fal_key)
+
+                        # Ideogram
+                        if (
+                            "ideogram" in providers
+                            and "credentials" in providers["ideogram"]
+                        ):
+                            ideogram_key = providers["ideogram"]["credentials"].get(
+                                "api_key", ""
+                            )
+                            self.ideogram_api_key_edit.setText(ideogram_key)
+
+                        # Stability AI
+                        if (
+                            "stability" in providers
+                            and "credentials" in providers["stability"]
+                        ):
+                            stability_key = providers["stability"]["credentials"].get(
+                                "api_key", ""
+                            )
+                            self.stability_api_key_edit.setText(stability_key)
+
+            # Load app settings
+            collision = self.config.get("collision_strategy", "counter")
+            idx = self.config_collision_combo.findText(collision)
+            if idx >= 0:
+                self.config_collision_combo.setCurrentIndex(idx)
+
+            self.config_recursive_check.setChecked(
+                bool(self.config.get("process_recursive", False))
+            )
+
+        except Exception as e:
+            print(f"Error loading config tab values: {e}")
+
+    def save_configuration(self) -> None:
+        """Save configuration from Config tab"""
+        try:
+            import os
+            import yaml
+
+            # === Save API Keys to providers.yaml ===
+            providers_file = "config/providers.yaml"
+            providers_config: dict[str, Any] = {"providers": {}}
+
+            # Fal.ai
+            fal_key = self.fal_api_key_edit.text().strip()
+            if fal_key:
+                providers_config["providers"]["fal"] = {
+                    "credentials": {"api_key": fal_key}
+                }
+
+            # Ideogram
+            ideogram_key = self.ideogram_api_key_edit.text().strip()
+            if ideogram_key:
+                providers_config["providers"]["ideogram"] = {
+                    "credentials": {"api_key": ideogram_key}
+                }
+
+            # Stability AI
+            stability_key = self.stability_api_key_edit.text().strip()
+            if stability_key:
+                providers_config["providers"]["stability"] = {
+                    "credentials": {"api_key": stability_key}
+                }
+
+            # Save providers.yaml
+            os.makedirs("config", exist_ok=True)
+            with open(providers_file, "w") as f:
+                yaml.dump(providers_config, f, default_flow_style=False)
+
+            # === Save app settings to config ===
+            self.config["collision_strategy"] = (
+                self.config_collision_combo.currentText()
+            )
+            self.config["process_recursive"] = self.config_recursive_check.isChecked()
+            save_config(self.config)
+
+            QMessageBox.information(
+                self,
+                "Configuration Saved",
+                "Configuration has been saved successfully!\n\n"
+                "API keys: config/providers.yaml\n"
+                "Settings: config/settings.json",
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Save Error", f"Failed to save configuration: {str(e)}"
+            )
 
     def generate_ai_images(self) -> None:
         """Start AI image generation"""
