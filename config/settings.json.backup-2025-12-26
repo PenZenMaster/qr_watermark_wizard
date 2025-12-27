@@ -1,0 +1,59 @@
+{
+  "input_dir": "D:/OneDrive/RankRocket/Clients/Adventure Marketing/EZ Dumpster/images/Tampa FL/original",
+  "output_dir": "D:/OneDrive/RankRocket/Clients/Adventure Marketing/EZ Dumpster/images/Tampa FL/watermarked",
+  "qr_link": "https://easydumpsterrental.com/florida/dumpster-rental-tampa-fl",
+  "qr_size_ratio": 0.15,
+  "qr_opacity": 0.85,
+  "text_overlay": "813-400-1178",
+  "text_color": [
+    255,
+    255,
+    255
+  ],
+  "shadow_color": [
+    0,
+    0,
+    0,
+    128
+  ],
+  "font_size_ratio": 0.05,
+  "text_padding_bottom_ratio": 0.041666666666666664,
+  "qr_padding_vh_ratio": 0.01574074074074074,
+  "font_family": "Tahoma",
+  "seo_rename": true,
+  "process_recursive": false,
+  "collision_strategy": "counter",
+  "slug_max_words": 4,
+  "slug_min_len": 4,
+  "slug_stopwords": [
+    "simple",
+    "compose",
+    "remix",
+    "beauty",
+    "installation",
+    "penzenmaster"
+  ],
+  "slug_whitelist": [
+    "copper",
+    "dormer",
+    "finial",
+    "chimney",
+    "shroud",
+    "custom",
+    "historic",
+    "home",
+    "homes",
+    "chicago",
+    "york",
+    "city",
+    "lake",
+    "front",
+    "collection",
+    "light",
+    "cupola",
+    "vane",
+    "weather"
+  ],
+  "slug_prefix": "best-dumpster-rental",
+  "slug_location": "Tampa"
+}

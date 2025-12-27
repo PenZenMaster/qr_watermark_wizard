@@ -71,14 +71,14 @@ class TestLoadConfig:
             "input_dir": "/path/to/input",
             "output_dir": "/path/to/output",
             "qr_link": "https://example.com",
-            "qr_size_ratio": 0.15,
+            "qr_size": 150,
             "qr_opacity": 0.85,
             "text_overlay": "Test Text",
             "text_color": [255, 255, 255],
             "shadow_color": [0, 0, 0, 128],
-            "font_size_ratio": 0.03,
-            "text_padding_bottom_ratio": 0.04,
-            "qr_padding_vh_ratio": 0.015,
+            "font_size": 72,
+            "text_padding": 40,
+            "qr_padding": 15,
         }
 
         config_file = tmp_path / "test_config.json"
@@ -88,7 +88,7 @@ class TestLoadConfig:
         result = load_config(str(config_file))
         assert result["input_dir"] == "/path/to/input"
         assert result["qr_link"] == "https://example.com"
-        assert result["qr_size_ratio"] == 0.15
+        assert result["qr_size"] == 150
 
     def test_load_config_with_optional_fields(self, tmp_path):
         """Test loading config with optional fields."""
@@ -96,14 +96,14 @@ class TestLoadConfig:
             "input_dir": "/path/to/input",
             "output_dir": "/path/to/output",
             "qr_link": "https://example.com",
-            "qr_size_ratio": 0.15,
+            "qr_size": 150,
             "qr_opacity": 0.85,
             "text_overlay": "Test",
             "text_color": [255, 255, 255],
             "shadow_color": [0, 0, 0, 128],
-            "font_size_ratio": 0.03,
-            "text_padding_bottom_ratio": 0.04,
-            "qr_padding_vh_ratio": 0.015,
+            "font_size": 72,
+            "text_padding": 40,
+            "qr_padding": 15,
             "seo_rename": True,
             "collision_strategy": "timestamp",
             "process_recursive": True,
@@ -167,14 +167,14 @@ class TestWatermarkApplication:
             "input_dir": str(tmp_path / "input"),
             "output_dir": str(tmp_path / "output"),
             "qr_link": "https://test.com",
-            "qr_size_ratio": 0.15,
+            "qr_size": 150,
             "qr_opacity": 0.85,
             "text_overlay": "Test Watermark\n555-1234",
             "text_color": [255, 255, 255],
             "shadow_color": [0, 0, 0, 128],
-            "font_size_ratio": 0.03,
-            "text_padding_bottom_ratio": 0.04,
-            "qr_padding_vh_ratio": 0.015,
+            "font_size": 72,
+            "text_padding": 40,
+            "qr_padding": 15,
             "font_family": "Arial",
             "seo_rename": False,
             "collision_strategy": "counter",
@@ -345,16 +345,14 @@ class TestEdgeCases:
 
 
 @pytest.mark.parametrize(
-    "qr_size_ratio,expected_min_size",
+    "qr_size,expected_size",
     [
-        (0.10, 40),  # 10% of 400px height = 40px
-        (0.15, 60),  # 15% of 400px height = 60px
-        (0.20, 80),  # 20% of 400px height = 80px
+        (100, 100),  # 100px QR code
+        (150, 150),  # 150px QR code (default)
+        (200, 200),  # 200px QR code
     ],
 )
-def test_qr_size_scaling(qr_size_ratio, expected_min_size):
-    """Test QR code scales correctly with different ratios."""
-    # Test that QR size calculation works correctly
-    height = 400
-    qr_size = int(height * qr_size_ratio)
-    assert qr_size == expected_min_size
+def test_qr_size_direct(qr_size, expected_size):
+    """Test QR code uses direct pixel size values."""
+    # Test that QR size is used directly without scaling
+    assert qr_size == expected_size

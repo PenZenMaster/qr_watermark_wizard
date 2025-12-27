@@ -62,19 +62,20 @@ def load_config(path="config/settings.json"):  # noqa: C901
 
 
 def refresh_config(path="config/settings.json"):  # noqa: C901
-    global config, INPUT_DIR, OUTPUT_DIR, QR_LINK, QR_SIZE_RATIO, QR_OPACITY, TEXT_OVERLAY, TEXT_COLOR, SHADOW_COLOR, FONT_SIZE_RATIO, TEXT_PADDING_BOTTOM_RATIO, QR_PADDING_VH_RATIO, SEO_RENAME, COLLISION_STRATEGY, PROCESS_RECURSIVE, SLUG_MAX_WORDS, SLUG_MIN_LEN, SLUG_STOPWORDS, SLUG_WHITELIST, SLUG_PREFIX, SLUG_LOCATION
+    global config, INPUT_DIR, OUTPUT_DIR, QR_LINK, QR_SIZE, QR_OPACITY, TEXT_OVERLAY, TEXT_COLOR, SHADOW_COLOR, FONT_SIZE, FONT_FAMILY, TEXT_PADDING, QR_PADDING, SEO_RENAME, COLLISION_STRATEGY, PROCESS_RECURSIVE, SLUG_MAX_WORDS, SLUG_MIN_LEN, SLUG_STOPWORDS, SLUG_WHITELIST, SLUG_PREFIX, SLUG_LOCATION
     config = load_config(path)
     INPUT_DIR = config["input_dir"]
     OUTPUT_DIR = config["output_dir"]
     QR_LINK = config["qr_link"]
-    QR_SIZE_RATIO = config["qr_size_ratio"]
+    QR_SIZE = config.get("qr_size", 150)  # QR code size in pixels
     QR_OPACITY = config["qr_opacity"]
     TEXT_OVERLAY = config["text_overlay"]
     TEXT_COLOR = tuple(config["text_color"])
     SHADOW_COLOR = tuple(config["shadow_color"])
-    FONT_SIZE_RATIO = config["font_size_ratio"]
-    TEXT_PADDING_BOTTOM_RATIO = config["text_padding_bottom_ratio"]
-    QR_PADDING_VH_RATIO = config["qr_padding_vh_ratio"]
+    FONT_SIZE = config.get("font_size", 72)  # Font size in points
+    FONT_FAMILY = config.get("font_family", "arial")  # Font family
+    TEXT_PADDING = config.get("text_padding", 40)  # Text padding in pixels
+    QR_PADDING = config.get("qr_padding", 15)  # QR padding in pixels
     SEO_RENAME = config.get("seo_rename", False)
     COLLISION_STRATEGY = config.get("collision_strategy", "counter")
     PROCESS_RECURSIVE = config.get("process_recursive", False)
@@ -105,14 +106,15 @@ config = load_config()
 INPUT_DIR = config["input_dir"]
 OUTPUT_DIR = config["output_dir"]
 QR_LINK = config["qr_link"]
-QR_SIZE_RATIO = config["qr_size_ratio"]
+QR_SIZE = config.get("qr_size", 150)  # QR code size in pixels
 QR_OPACITY = config["qr_opacity"]
 TEXT_OVERLAY = config["text_overlay"]
 TEXT_COLOR = tuple(config["text_color"])
 SHADOW_COLOR = tuple(config["shadow_color"])
-FONT_SIZE_RATIO = config["font_size_ratio"]
-TEXT_PADDING_BOTTOM_RATIO = config["text_padding_bottom_ratio"]
-QR_PADDING_VH_RATIO = config["qr_padding_vh_ratio"]
+FONT_SIZE = config.get("font_size", 72)  # Font size in points
+FONT_FAMILY = config.get("font_family", "arial")  # Font family
+TEXT_PADDING = config.get("text_padding", 40)  # Text padding in pixels
+QR_PADDING = config.get("qr_padding", 15)  # QR padding in pixels
 SEO_RENAME = config.get("seo_rename", False)
 
 # Additional runtime settings with defaults
@@ -159,26 +161,31 @@ def apply_watermark(
         base_img = orig.convert("RGBA")
         width, height = base_img.size
         # --- Generate QR Code ---
-        qr_size = int(height * QR_SIZE_RATIO)
+        qr_size = QR_SIZE  # Direct pixel size
         qr_img = generate_qr_code(QR_LINK, (qr_size, qr_size))
         qr_img.putalpha(int(255 * QR_OPACITY))
         # Position: upper-right
-        qr_padding = int(height * QR_PADDING_VH_RATIO)
+        qr_padding = QR_PADDING  # Direct pixel padding
         qr_position = (width - qr_size - qr_padding, qr_padding)
         base_img.paste(qr_img, qr_position, qr_img)
         # --- Add Text Overlay ---
         draw = ImageDraw.Draw(base_img)
-        font_size = int(width * FONT_SIZE_RATIO)
+        font_size = FONT_SIZE  # Font size in points
         try:
-            font = ImageFont.truetype("arial.ttf", font_size)
+            # Try to load the specified font family
+            font = ImageFont.truetype(f"{FONT_FAMILY}.ttf", font_size)
         except IOError:
-            font = ImageFont.load_default()  # type: ignore[assignment]
+            # Fallback to default font if specified font not found
+            try:
+                font = ImageFont.truetype("arial.ttf", font_size)
+            except IOError:
+                font = ImageFont.load_default()  # type: ignore[assignment]
         lines = TEXT_OVERLAY.splitlines()
         total_height = sum(
             font.getbbox(line)[3] - font.getbbox(line)[1] for line in lines
         )
         text_x = 10
-        text_y = height - int(height * TEXT_PADDING_BOTTOM_RATIO) - total_height
+        text_y = height - TEXT_PADDING - total_height  # Direct pixel padding
         for line in lines:
             draw.text((text_x + 2, text_y + 2), line, font=font, fill=SHADOW_COLOR)
             draw.text((text_x, text_y), line, font=font, fill=TEXT_COLOR)

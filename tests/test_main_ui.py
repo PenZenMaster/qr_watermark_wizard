@@ -90,12 +90,12 @@ class TestConfigurationIO:
             "input_dir": "E:/projects/test/input",
             "output_dir": "E:/projects/test/output",
             "qr_link": "https://example.com/page",
-            "qr_size_ratio": 0.15,
+            "qr_size": 150,
             "qr_opacity": 0.85,
             "text_overlay": "Multi\nLine\nText",
             "text_color": [255, 255, 255],
             "shadow_color": [0, 0, 0, 128],
-            "font_size_ratio": 0.03,
+            "font_size": 72,
         }
 
         config_file = tmp_path / "roundtrip_config.json"
@@ -146,14 +146,14 @@ class TestConfigurationValidation:
             "input_dir": "E:/projects/test/input",
             "output_dir": "E:/projects/test/output",
             "qr_link": "https://example.com",
-            "qr_size_ratio": 0.15,
+            "qr_size": 150,
             "qr_opacity": 0.85,
             "text_overlay": "Test Company\n555-1234",
             "text_color": [255, 255, 255],
             "shadow_color": [0, 0, 0, 128],
-            "font_size_ratio": 0.03,
-            "text_padding_bottom_ratio": 0.04,
-            "qr_padding_vh_ratio": 0.015,
+            "font_size": 72,
+            "text_padding": 40,
+            "qr_padding": 15,
             "font_family": "Arial",
             "seo_rename": True,
             "collision_strategy": "counter",
@@ -178,14 +178,14 @@ class TestConfigurationValidation:
             "input_dir": "E:/projects/test/input",
             "output_dir": "E:/projects/test/output",
             "qr_link": "https://example.com",
-            "qr_size_ratio": 0.15,
+            "qr_size": 150,
             "qr_opacity": 0.85,
             "text_overlay": "Test",
             "text_color": [255, 255, 255],
             "shadow_color": [0, 0, 0, 128],
-            "font_size_ratio": 0.03,
-            "text_padding_bottom_ratio": 0.04,
-            "qr_padding_vh_ratio": 0.015,
+            "font_size": 72,
+            "text_padding": 40,
+            "qr_padding": 15,
         }
 
         config_file = tmp_path / "minimal_config.json"
@@ -272,27 +272,36 @@ class TestColorConfiguration:
             assert not all(0 <= c <= 255 for c in color)
 
 
-class TestRatioConfiguration:
-    """Test ratio value handling."""
+class TestPixelConfiguration:
+    """Test pixel and point value handling."""
 
     @pytest.mark.parametrize(
-        "ratio_name,ratio_value,is_valid",
+        "param_name,param_value,is_valid",
         [
-            ("qr_size_ratio", 0.15, True),
-            ("qr_opacity", 0.85, True),
-            ("font_size_ratio", 0.03, True),
-            ("qr_size_ratio", 1.5, False),  # > 1.0
-            ("qr_opacity", -0.1, False),  # Negative
-            ("qr_size_ratio", 0.0, True),  # Edge case: zero
-            ("qr_opacity", 1.0, True),  # Edge case: max
+            ("qr_size", 150, True),  # Valid QR size in pixels
+            ("qr_padding", 15, True),  # Valid QR padding in pixels
+            ("font_size", 72, True),  # Valid font size in points
+            ("text_padding", 40, True),  # Valid text padding in pixels
+            ("qr_opacity", 0.85, True),  # Opacity still uses ratio (0.0-1.0)
+            ("qr_size", -10, False),  # Negative pixels invalid
+            ("font_size", 0, False),  # Zero font size invalid
+            ("qr_opacity", 1.5, False),  # Opacity > 1.0 invalid
         ],
     )
-    def test_ratio_value_ranges(self, tmp_path, ratio_name, ratio_value, is_valid):
-        """Test ratio values are in valid range (0.0-1.0)."""
-        if is_valid:
-            assert 0.0 <= ratio_value <= 1.0
+    def test_pixel_value_ranges(self, tmp_path, param_name, param_value, is_valid):
+        """Test pixel and point values are in valid ranges."""
+        if "opacity" in param_name:
+            # Opacity should be 0.0-1.0
+            if is_valid:
+                assert 0.0 <= param_value <= 1.0
+            else:
+                assert not (0.0 <= param_value <= 1.0)
         else:
-            assert not (0.0 <= ratio_value <= 1.0)
+            # Pixel/point values should be positive
+            if is_valid:
+                assert param_value > 0
+            else:
+                assert param_value <= 0
 
 
 class TestEdgeCases:

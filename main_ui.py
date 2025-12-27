@@ -16,9 +16,10 @@ Last Modified Date:
 12-26-2025
 
 Version:
-v2.1.0
+v3.0.0
 
 Comments:
+- v3.0.0: Major refactor - removed all ratio-based measurements, replaced with direct pixel/point values. Added auto-save for AI generation. Added Skippy to About dialog.
 - v2.1.0: Phase 3 - AI Generation UI complete. Added AI Generation tab with provider selection (Fal.ai, Ideogram, Stability AI), prompt controls, parameter tuning, async generation with progress feedback, preview grid, save/send-to-watermark functionality.
 - v2.0.0: Major version bump for AI image generation feature development. Added comprehensive unit testing framework (105 tests). Semantic versioning implemented.
 - v1.07.31: Fixed all Pylance errors including method definitions, syntax issues, and removed obsolete method references.
@@ -52,8 +53,15 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QLineEdit,
     QCheckBox,
+    QMenu,
+    QTableWidget,
+    QTableWidgetItem,
+    QDoubleSpinBox,
+    QHeaderView,
+    QAbstractItemView,
+    QInputDialog,
 )
-from PyQt6.QtGui import QPixmap, QFont
+from PyQt6.QtGui import QPixmap, QFont, QIcon, QColor
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PIL import Image
 from PIL.ImageQt import ImageQt
@@ -73,6 +81,17 @@ try:
 except ImportError:
     AI_AVAILABLE = False
     print("Warning: AI generation modules not available")
+
+# Profile Management imports
+try:
+    from qrmr.config_store import ConfigStore
+    from qrmr.config_schema import ClientProfile
+    from qrmr.utils import slugify
+
+    PROFILE_SYSTEM_AVAILABLE = True
+except ImportError:
+    PROFILE_SYSTEM_AVAILABLE = False
+    print("Warning: Profile management modules not available")
 
 
 def load_config(path: str = "config/settings.json") -> dict:
@@ -265,13 +284,20 @@ class WatermarkWizard(QtWidgets.QMainWindow):
     slugLocationLabel: Optional[Any]
     slugLocationEdit: Optional[Any]
 
+    # Profile management attributes
+    config_store: Optional[Any]
+    active_profile: Optional[Any]
+    profile_table: Optional[QTableWidget]
+    recent_profiles_menu: Optional[QMenu]
+    profile_status_label: Optional[QLabel]
+
     def __init__(self) -> None:
         super().__init__()
         self.ui = Ui_WatermarkWizard()
         self.ui.setupUi(self)
 
         # Set application title with version
-        self.setWindowTitle("Rank Rocket Watermark Wizard v2.1.0")
+        self.setWindowTitle("Rank Rocket Watermark Wizard v3.0.0")
 
         self.config = load_config()
         self.watermark_thread: Optional[WatermarkThread] = None
@@ -297,6 +323,19 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         self.ai_preview_grid: Optional[QGridLayout] = None
         self.ai_generate_btn: Optional[QPushButton] = None
 
+        # Profile Management attributes
+        self.config_store: Optional[ConfigStore] = None
+        self.active_profile: Optional[ClientProfile] = None
+        self.profile_table: Optional[QTableWidget] = None
+        self.recent_profiles_menu: Optional[QMenu] = None
+        self.profile_status_label: Optional[QLabel] = None
+
+        # Setup menu bar and status bar FIRST (before other UI setup)
+        if PROFILE_SYSTEM_AVAILABLE:
+            self.setup_menu_bar()
+            self.setup_status_bar()
+            self.setup_window_icon()
+
         # Improve overall UI appearance
         self.improve_ui_styling()
 
@@ -316,8 +355,16 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             self.setup_ai_generation_tab()
             self.setup_config_tab()
 
+        # Setup Clients tab for profile management
+        if PROFILE_SYSTEM_AVAILABLE and AI_AVAILABLE:
+            self.setup_clients_tab()
+
         # Use timer to add tick labels after UI is fully rendered
         QTimer.singleShot(100, self.add_tick_labels)
+
+        # Check and load default profile after all UI is set up
+        if PROFILE_SYSTEM_AVAILABLE:
+            QTimer.singleShot(500, self.check_and_load_default_profile)
 
     def improve_ui_styling(self) -> None:
         """Improve overall UI styling and spacing"""
@@ -665,12 +712,11 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         self.ui.overlayText.setPlainText(cfg.get("text_overlay", ""))
         self.ui.qrLink.setText(cfg.get("qr_link", ""))
 
-        # Load font family and size
-        font_ratio = cfg.get("font_size_ratio", 0.02)  # Default 2%
-        font_pt = int(font_ratio * 1920 * 0.75)  # Convert to approx points
-        font_pt = max(8, min(72, font_pt))  # Clamp to reasonable range
+        # Load font family and size (in points)
+        font_pt = cfg.get("font_size", 72)  # Default 72pt
+        font_pt = max(8, min(200, font_pt))  # Clamp to reasonable range
 
-        # Get font family from config (add this to config if not present)
+        # Get font family from config
         font_family = cfg.get("font_family", "Arial")
 
         # Set font family combo box
@@ -698,13 +744,11 @@ class WatermarkWizard(QtWidgets.QMainWindow):
                             closest_index = i
                 self.font_size_combo.setCurrentIndex(closest_index)
 
-        # Load padding values for sliders
-        text_ratio = cfg.get("text_padding_bottom_ratio", 0.05)  # Default 5%
-        text_px = int(text_ratio * 1080)
+        # Load padding values for sliders (direct pixel values)
+        text_px = cfg.get("text_padding", 40)  # Default 40px
         text_px = max(0, min(500, text_px))  # Clamp to slider range
 
-        qr_ratio = cfg.get("qr_padding_vh_ratio", 0.02)  # Default 2%
-        qr_px = int(qr_ratio * 1080)
+        qr_px = cfg.get("qr_padding", 15)  # Default 15px
         qr_px = max(0, min(300, qr_px))  # Clamp to slider range
 
         # Set slider values
@@ -923,9 +967,26 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         self.run_watermarking()  # Run processing
 
     def save_and_run(self) -> None:
-        """Save config and run watermarking"""
+        """Save config and run watermarking (updated for profile system)"""
+        # Update legacy config dict (needed for qr_watermark.py)
         self.update_config_from_ui()
-        save_config(self.config)
+
+        # Save to active profile if exists, otherwise fall back to settings.json
+        if (
+            hasattr(self, "active_profile")
+            and self.active_profile
+            and self.config_store
+        ):
+            # Update active profile from UI
+            self.update_active_profile_from_ui()
+            # Save profile to YAML
+            self.config_store.save_profile(self.active_profile)
+            print(f"[INFO] Saved to profile: {self.active_profile.profile.slug}")
+        else:
+            # Fallback to legacy settings.json
+            save_config(self.config)
+            print("[INFO] Saved to settings.json (no active profile)")
+
         self.run_watermarking()
 
     def run_watermarking(self) -> None:
@@ -997,15 +1058,14 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             font_text = self.font_size_combo.currentText()
             if font_text.endswith("pt"):
                 font_pt = int(font_text[:-2])
-                font_px = font_pt / 0.75  # Convert pt to px
-                self.config["font_size_ratio"] = font_px / 1920
+                self.config["font_size"] = font_pt  # Save font size in points directly
 
-        # Convert pixels to ratios for padding sliders
+        # Save padding values directly in pixels
         text_px = self.ui.textPaddingSlider.value()
-        self.config["text_padding_bottom_ratio"] = text_px / 1080
+        self.config["text_padding"] = text_px
 
         qr_px = self.ui.qrPaddingSlider.value()
-        self.config["qr_padding_vh_ratio"] = qr_px / 1080
+        self.config["qr_padding"] = qr_px
 
         # Update SEO rename setting
         self.config["seo_rename"] = self.ui.seoRenameCheck.isChecked()
@@ -1356,7 +1416,11 @@ class WatermarkWizard(QtWidgets.QMainWindow):
                 # Get the main vertical layout
                 from PyQt6.QtWidgets import QVBoxLayout as VBoxLayout
 
-                main_layout = self.centralWidget().layout()
+                central_widget = self.centralWidget()
+                if not central_widget:
+                    print("Error: No central widget found")
+                    return
+                main_layout = central_widget.layout()
                 if not main_layout or not isinstance(main_layout, VBoxLayout):
                     print("Error: No main layout found or not QVBoxLayout")
                     return
@@ -1694,33 +1758,47 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             if os.path.exists(providers_file):
                 with open(providers_file, "r") as f:
                     providers_config = yaml.safe_load(f)
-                    if providers_config and "providers" in providers_config:
-                        providers = providers_config["providers"]
+                    if providers_config:
+                        # Support both old and new structure
+                        providers = providers_config.get("providers", providers_config)
 
                         # Fal.ai
-                        if "fal" in providers and "credentials" in providers["fal"]:
-                            fal_key = providers["fal"]["credentials"].get("api_key", "")
-                            self.fal_api_key_edit.setText(fal_key)
+                        if "fal" in providers:
+                            # New structure: fal.api_key
+                            fal_key = providers["fal"].get("api_key", "")
+                            # Old structure fallback: fal.credentials.api_key
+                            if not fal_key and "credentials" in providers["fal"]:
+                                fal_key = providers["fal"]["credentials"].get(
+                                    "api_key", ""
+                                )
+                            if fal_key:
+                                self.fal_api_key_edit.setText(fal_key)
 
                         # Ideogram
-                        if (
-                            "ideogram" in providers
-                            and "credentials" in providers["ideogram"]
-                        ):
-                            ideogram_key = providers["ideogram"]["credentials"].get(
-                                "api_key", ""
-                            )
-                            self.ideogram_api_key_edit.setText(ideogram_key)
+                        if "ideogram" in providers:
+                            ideogram_key = providers["ideogram"].get("api_key", "")
+                            if (
+                                not ideogram_key
+                                and "credentials" in providers["ideogram"]
+                            ):
+                                ideogram_key = providers["ideogram"]["credentials"].get(
+                                    "api_key", ""
+                                )
+                            if ideogram_key:
+                                self.ideogram_api_key_edit.setText(ideogram_key)
 
                         # Stability AI
-                        if (
-                            "stability" in providers
-                            and "credentials" in providers["stability"]
-                        ):
-                            stability_key = providers["stability"]["credentials"].get(
-                                "api_key", ""
-                            )
-                            self.stability_api_key_edit.setText(stability_key)
+                        if "stability" in providers:
+                            stability_key = providers["stability"].get("api_key", "")
+                            if (
+                                not stability_key
+                                and "credentials" in providers["stability"]
+                            ):
+                                stability_key = providers["stability"][
+                                    "credentials"
+                                ].get("api_key", "")
+                            if stability_key:
+                                self.stability_api_key_edit.setText(stability_key)
 
             # Load app settings
             collision = self.config.get("collision_strategy", "counter")
@@ -1743,28 +1821,22 @@ class WatermarkWizard(QtWidgets.QMainWindow):
 
             # === Save API Keys to providers.yaml ===
             providers_file = "config/providers.yaml"
-            providers_config: dict[str, Any] = {"providers": {}}
+            providers_config: dict[str, Any] = {}
 
             # Fal.ai
             fal_key = self.fal_api_key_edit.text().strip()
             if fal_key:
-                providers_config["providers"]["fal"] = {
-                    "credentials": {"api_key": fal_key}
-                }
+                providers_config["fal"] = {"api_key": fal_key}
 
             # Ideogram
             ideogram_key = self.ideogram_api_key_edit.text().strip()
             if ideogram_key:
-                providers_config["providers"]["ideogram"] = {
-                    "credentials": {"api_key": ideogram_key}
-                }
+                providers_config["ideogram"] = {"api_key": ideogram_key}
 
             # Stability AI
             stability_key = self.stability_api_key_edit.text().strip()
             if stability_key:
-                providers_config["providers"]["stability"] = {
-                    "credentials": {"api_key": stability_key}
-                }
+                providers_config["stability"] = {"api_key": stability_key}
 
             # Save providers.yaml
             os.makedirs("config", exist_ok=True)
@@ -1882,6 +1954,52 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             self.progress_dialog.setLabelText(message)
         print(f"AI Generation Progress: {message}")
 
+    def _auto_save_generated_images(self, images: List[Image.Image]) -> List[str]:
+        """
+        Auto-save generated images to generation_output_dir.
+
+        Args:
+            images: List of PIL Image objects to save
+
+        Returns:
+            List of saved file paths
+        """
+        try:
+            # Determine output directory
+            output_dir = None
+
+            # Try to get from active profile first
+            if hasattr(self, "active_profile") and self.active_profile:
+                output_dir = self.active_profile.paths.generation_output_dir
+
+            # Fallback to config
+            if not output_dir:
+                output_dir = self.config.get("generation_output_dir", "")
+
+            # Final fallback to current directory
+            if not output_dir:
+                output_dir = os.path.join(os.getcwd(), "generated_images")
+
+            # Create directory if it doesn't exist
+            os.makedirs(output_dir, exist_ok=True)
+
+            # Save each image
+            saved_paths = []
+            timestamp = int(__import__("time").time())
+
+            for idx, img in enumerate(images):
+                filename = f"ai_generated_{timestamp}_{idx + 1}.png"
+                filepath = os.path.join(output_dir, filename)
+                img.save(filepath, "PNG")
+                saved_paths.append(filepath)
+                print(f"[SUCCESS] Saved generated image: {filepath}")
+
+            return saved_paths
+
+        except Exception as e:
+            print(f"[ERROR] Failed to auto-save images: {e}")
+            return []
+
     def on_ai_generation_finished(self, images: List[Image.Image]) -> None:
         """Handle successful AI image generation"""
         if self.ai_generate_btn:
@@ -1895,14 +2013,27 @@ class WatermarkWizard(QtWidgets.QMainWindow):
         # Store generated images
         self.generated_images = images
 
+        # Auto-save images to generation_output_dir
+        saved_paths = self._auto_save_generated_images(images)
+
         # Display images in preview grid
         self.display_generated_images(images)
 
-        QMessageBox.information(
-            self,
-            "Generation Complete",
-            f"Successfully generated {len(images)} image(s)!",
-        )
+        # Show success message with save location
+        if saved_paths:
+            save_dir = os.path.dirname(saved_paths[0])
+            QMessageBox.information(
+                self,
+                "Generation Complete",
+                f"Successfully generated {len(images)} image(s)!\n\n"
+                f"Images saved to:\n{save_dir}",
+            )
+        else:
+            QMessageBox.information(
+                self,
+                "Generation Complete",
+                f"Successfully generated {len(images)} image(s)!",
+            )
 
     def on_ai_generation_error(self, error_msg: str) -> None:
         """Handle AI generation errors"""
@@ -1927,8 +2058,10 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             # Clear existing preview
             while self.ai_preview_grid.count():
                 item = self.ai_preview_grid.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
+                if item:
+                    widget = item.widget()
+                    if widget:
+                        widget.deleteLater()
 
             # Display images in grid (2 columns)
             for idx, img in enumerate(images):
@@ -2040,6 +2173,1558 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             QMessageBox.critical(
                 self, "Error", f"Failed to send image to watermark: {str(e)}"
             )
+
+    # ========== PROFILE MANAGEMENT METHODS ==========
+
+    def setup_menu_bar(self) -> None:
+        """Create application menu bar with File and Help menus"""
+        try:
+            menubar = self.menuBar()
+            assert menubar is not None
+
+            # File Menu
+            file_menu = menubar.addMenu("&File")
+            assert file_menu is not None
+
+            # Load Profile action
+            load_profile_action = file_menu.addAction("&Load Profile...")
+            assert load_profile_action is not None
+            load_profile_action.setShortcut("Ctrl+O")
+            load_profile_action.triggered.connect(self.show_profile_selector)
+
+            # Recent Profiles submenu
+            self.recent_profiles_menu = file_menu.addMenu("Recent Profiles")
+            self.update_recent_profiles_menu()
+
+            file_menu.addSeparator()
+
+            # Exit action
+            exit_action = file_menu.addAction("E&xit")
+            assert exit_action is not None
+            exit_action.setShortcut("Ctrl+Q")
+            exit_action.triggered.connect(self.close)
+
+            # Help Menu (future expansion)
+            help_menu = menubar.addMenu("&Help")
+            assert help_menu is not None
+            about_action = help_menu.addAction("&About")
+            assert about_action is not None
+            about_action.triggered.connect(self.show_about_dialog)
+
+            print("Menu bar setup complete")
+
+        except Exception as e:
+            print(f"Error setting up menu bar: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    def setup_status_bar(self) -> None:
+        """Create status bar for active profile indicator"""
+        try:
+            status_bar = self.statusBar()
+            assert status_bar is not None
+            self.profile_status_label = QLabel("No profile loaded")
+            status_bar.addPermanentWidget(self.profile_status_label)
+            print("Status bar setup complete")
+
+        except Exception as e:
+            print(f"Error setting up status bar: {e}")
+
+    def update_status_bar(self, profile: Optional[ClientProfile] = None) -> None:
+        """Update status bar with active profile info"""
+        try:
+            if profile and self.profile_status_label:
+                text = f"Active Profile: {profile.profile.slug} | Last Modified: {profile.profile.modified}"
+                self.profile_status_label.setText(text)
+            elif self.profile_status_label:
+                self.profile_status_label.setText("No profile loaded")
+
+        except Exception as e:
+            print(f"Error updating status bar: {e}")
+
+    def setup_window_icon(self) -> None:
+        """Set application window icon"""
+        try:
+            icon_paths = [
+                "assets/icon.ico",
+                "assets/icon.png",
+                "icon.ico",
+                "icon.png",
+            ]
+
+            for icon_path in icon_paths:
+                if os.path.exists(icon_path):
+                    self.setWindowIcon(QIcon(icon_path))
+                    print(f"Window icon loaded from: {icon_path}")
+                    return
+
+            print(
+                "No window icon found (checked: assets/icon.ico, assets/icon.png, icon.ico, icon.png)"
+            )
+
+        except Exception as e:
+            print(f"Error setting window icon: {e}")
+
+    def show_about_dialog(self) -> None:
+        """Show About dialog with Skippy image"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("About QR Watermark Wizard")
+        dialog.setModal(True)
+
+        layout = QVBoxLayout()
+
+        # Add Skippy image at the top
+        image_path = os.path.join(
+            os.path.dirname(__file__), "images", "skippy_the_magnificient.png"
+        )
+        if os.path.exists(image_path):
+            image_label = QLabel()
+            pixmap = QPixmap(image_path)
+            # Scale image to reasonable size if needed (max width 400px)
+            if pixmap.width() > 400:
+                pixmap = pixmap.scaledToWidth(
+                    400, Qt.TransformationMode.SmoothTransformation
+                )
+            image_label.setPixmap(pixmap)
+            image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(image_label)
+
+        # Add version and info text
+        info_label = QLabel(
+            "<h2>QR Watermark Wizard v3.0.0</h2>"
+            "<p>AI-powered image generation and QR code watermarking tool.</p>"
+            "<p><b>Rank Rocket Co (C) Copyright 2025 - All Rights Reserved</b></p>"
+        )
+        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        # Add OK button
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(dialog.accept)
+        layout.addWidget(ok_button, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        dialog.setLayout(layout)
+        dialog.exec()
+
+    def update_recent_profiles_menu(self) -> None:
+        """Update Recent Profiles submenu"""
+        if not self.recent_profiles_menu:
+            return
+
+        try:
+            # Clear existing items
+            self.recent_profiles_menu.clear()
+
+            # Get recent profiles
+            if not self.config_store:
+                self.config_store = ConfigStore()
+
+            recent = self.config_store.get_recent_profiles()
+
+            if not recent:
+                no_recent_action = self.recent_profiles_menu.addAction(
+                    "No recent profiles"
+                )
+                if no_recent_action:
+                    no_recent_action.setEnabled(False)
+                return
+
+            # Add recent profiles (max 10)
+            for slug in recent[:10]:
+                try:
+                    profile = self.config_store.load_profile(slug)
+                    action = self.recent_profiles_menu.addAction(
+                        f"{profile.profile.name} ({slug})"
+                    )
+                    if action:
+                        action.triggered.connect(
+                            lambda checked, s=slug: self.load_profile_into_ui(s)
+                        )
+                except Exception as e:
+                    print(f"Error loading recent profile {slug}: {e}")
+
+        except Exception as e:
+            print(f"Error updating recent profiles menu: {e}")
+
+    def show_profile_selector(self) -> None:
+        """Show profile selector dialog"""
+        try:
+            if not self.config_store:
+                self.config_store = ConfigStore()
+
+            profiles = self.config_store.list_profiles()
+
+            if not profiles:
+                reply = QMessageBox.question(
+                    self,
+                    "No Profiles",
+                    "No profiles found. Would you like to create one?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    self.show_profile_editor(None)
+                return
+
+            # Show profile selector dialog
+            profile_names = []
+            for slug in profiles:
+                try:
+                    profile = self.config_store.load_profile(slug)
+                    profile_names.append(f"{profile.profile.name} ({slug})")
+                except Exception:
+                    profile_names.append(slug)
+
+            selected, ok = QInputDialog.getItem(
+                self,
+                "Select Profile",
+                "Choose a profile to load:",
+                profile_names,
+                0,
+                False,
+            )
+
+            if ok and selected:
+                # Extract slug from selection (text after last '(')
+                slug = selected.split("(")[-1].rstrip(")")
+                self.load_profile_into_ui(slug)
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error", f"Failed to show profile selector: {str(e)}"
+            )
+            import traceback
+
+            traceback.print_exc()
+
+    def setup_clients_tab(self) -> None:
+        """Setup Clients tab for profile management"""
+        try:
+            if not self.ai_tab_widget:
+                print("Error: Tab widget not initialized")
+                return
+
+            # Create Clients tab widget
+            clients_widget = QWidget()
+            clients_layout = QVBoxLayout(clients_widget)
+
+            # Toolbar at top
+            toolbar = QHBoxLayout()
+
+            create_btn = QPushButton("Create New Profile")
+            create_btn.setStyleSheet(
+                "background-color: #28a745; color: white; padding: 8px 16px; font-weight: bold;"
+            )
+            create_btn.clicked.connect(lambda: self.show_profile_editor(None))
+            toolbar.addWidget(create_btn)
+
+            refresh_btn = QPushButton("Refresh")
+            refresh_btn.clicked.connect(self.refresh_profile_list)
+            toolbar.addWidget(refresh_btn)
+
+            toolbar.addStretch()
+            clients_layout.addLayout(toolbar)
+
+            # Profile table
+            self.profile_table = QTableWidget()
+            self.profile_table.setColumnCount(5)
+            self.profile_table.setHorizontalHeaderLabels(
+                ["Name", "Slug", "QR Link", "Last Modified", "Actions"]
+            )
+
+            # Table properties
+            self.profile_table.setSelectionBehavior(
+                QAbstractItemView.SelectionBehavior.SelectRows
+            )
+            self.profile_table.setEditTriggers(
+                QAbstractItemView.EditTrigger.NoEditTriggers
+            )
+
+            # Column sizing
+            header = self.profile_table.horizontalHeader()
+            assert header is not None
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # Name
+            header.setSectionResizeMode(
+                1, QHeaderView.ResizeMode.ResizeToContents
+            )  # Slug
+            header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)  # QR Link
+            header.setSectionResizeMode(
+                3, QHeaderView.ResizeMode.ResizeToContents
+            )  # Modified
+            header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)  # Actions
+            self.profile_table.setColumnWidth(4, 250)
+
+            # Double-click to load profile
+            self.profile_table.cellDoubleClicked.connect(
+                self.on_profile_table_double_click
+            )
+
+            # Right-click context menu
+            self.profile_table.setContextMenuPolicy(
+                Qt.ContextMenuPolicy.CustomContextMenu
+            )
+            self.profile_table.customContextMenuRequested.connect(
+                self.show_profile_context_menu
+            )
+
+            clients_layout.addWidget(self.profile_table)
+
+            # Add Clients tab (index 3, after Configuration)
+            self.ai_tab_widget.addTab(clients_widget, "Clients")
+
+            # Initialize ConfigStore
+            if not self.config_store:
+                self.config_store = ConfigStore()
+
+            # Load profile list
+            self.refresh_profile_list()
+
+            print("Clients tab setup complete")
+
+        except Exception as e:
+            print(f"Error setting up Clients tab: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    def refresh_profile_list(self) -> None:
+        """Refresh profile table with current profiles"""
+        try:
+            if not self.profile_table:
+                return
+
+            if not self.config_store:
+                self.config_store = ConfigStore()
+
+            # Clear table
+            self.profile_table.setRowCount(0)
+
+            # Get profile slugs
+            profile_slugs = self.config_store.list_profiles()
+
+            if not profile_slugs:
+                # Show empty state message
+                self.profile_table.setRowCount(1)
+                empty_msg = QTableWidgetItem(
+                    "No profiles found. Click 'Create New Profile' to get started."
+                )
+                empty_msg.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.profile_table.setItem(0, 0, empty_msg)
+                self.profile_table.setSpan(0, 0, 1, 5)
+                return
+
+            # Load and display each profile
+            self.profile_table.setRowCount(len(profile_slugs))
+
+            for row, slug in enumerate(profile_slugs):
+                try:
+                    profile = self.config_store.load_profile(slug)
+
+                    # Name
+                    name_item = QTableWidgetItem(profile.profile.name)
+                    self.profile_table.setItem(row, 0, name_item)
+
+                    # Slug
+                    slug_item = QTableWidgetItem(profile.profile.slug)
+                    slug_item.setForeground(QColor("#666"))
+                    self.profile_table.setItem(row, 1, slug_item)
+
+                    # QR Link (truncated)
+                    qr_link = profile.watermark.qr_link
+                    if len(qr_link) > 50:
+                        qr_link = qr_link[:47] + "..."
+                    qr_item = QTableWidgetItem(qr_link)
+                    self.profile_table.setItem(row, 2, qr_item)
+
+                    # Last Modified
+                    modified_item = QTableWidgetItem(profile.profile.modified)
+                    self.profile_table.setItem(row, 3, modified_item)
+
+                    # Actions buttons
+                    actions_widget = QWidget()
+                    actions_layout = QHBoxLayout(actions_widget)
+                    actions_layout.setContentsMargins(4, 4, 4, 4)
+                    actions_layout.setSpacing(4)
+
+                    load_btn = QPushButton("Load")
+                    load_btn.setStyleSheet(
+                        "background-color: #0078d4; color: white; padding: 4px 8px;"
+                    )
+                    load_btn.clicked.connect(
+                        lambda checked, s=slug: self.load_profile_into_ui(s)
+                    )
+
+                    edit_btn = QPushButton("Edit")
+                    edit_btn.setStyleSheet("padding: 4px 8px;")
+                    edit_btn.clicked.connect(
+                        lambda checked, s=slug: self.show_profile_editor(s)
+                    )
+
+                    delete_btn = QPushButton("Delete")
+                    delete_btn.setStyleSheet(
+                        "background-color: #d32f2f; color: white; padding: 4px 8px;"
+                    )
+                    delete_btn.clicked.connect(
+                        lambda checked, s=slug: self.delete_profile_with_confirmation(s)
+                    )
+
+                    actions_layout.addWidget(load_btn)
+                    actions_layout.addWidget(edit_btn)
+                    actions_layout.addWidget(delete_btn)
+                    actions_layout.addStretch()
+
+                    self.profile_table.setCellWidget(row, 4, actions_widget)
+
+                except Exception as e:
+                    print(f"Error loading profile {slug}: {e}")
+                    error_item = QTableWidgetItem(f"Error: {slug}")
+                    self.profile_table.setItem(row, 0, error_item)
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error", f"Failed to load profile list: {str(e)}"
+            )
+            import traceback
+
+            traceback.print_exc()
+
+    def on_profile_table_double_click(self, row: int, column: int) -> None:
+        """Handle double-click on profile table row"""
+        try:
+            if not self.profile_table:
+                return
+            slug_item = self.profile_table.item(row, 1)
+            if slug_item:
+                slug = slug_item.text()
+                self.load_profile_into_ui(slug)
+        except Exception as e:
+            print(f"Error on double-click: {e}")
+
+    def show_profile_context_menu(self, position) -> None:
+        """Show right-click context menu for profile table"""
+        try:
+            if not self.profile_table:
+                return
+
+            row = self.profile_table.rowAt(position.y())
+            if row < 0:
+                return
+
+            slug_item = self.profile_table.item(row, 1)
+            if not slug_item:
+                return
+
+            slug = slug_item.text()
+
+            menu = QMenu()
+
+            load_action = menu.addAction("Load Profile")
+            if load_action:
+                load_action.triggered.connect(lambda: self.load_profile_into_ui(slug))
+
+            edit_action = menu.addAction("Edit Profile")
+            if edit_action:
+                edit_action.triggered.connect(lambda: self.show_profile_editor(slug))
+
+            duplicate_action = menu.addAction("Duplicate Profile")
+            if duplicate_action:
+                duplicate_action.triggered.connect(lambda: self.duplicate_profile(slug))
+
+            menu.addSeparator()
+
+            delete_action = menu.addAction("Delete Profile")
+            if delete_action:
+                delete_action.triggered.connect(
+                    lambda: self.delete_profile_with_confirmation(slug)
+                )
+
+            viewport = self.profile_table.viewport()
+            if viewport:
+                menu.exec(viewport.mapToGlobal(position))
+
+        except Exception as e:
+            print(f"Error showing context menu: {e}")
+
+    def load_profile_into_ui(self, slug: str) -> None:
+        """Load profile and populate all UI fields"""
+        try:
+            if not self.config_store:
+                self.config_store = ConfigStore()
+
+            # Load profile
+            profile = self.config_store.load_profile(slug)
+
+            # Store active profile
+            self.active_profile = profile
+
+            # Update UI from profile
+            self.update_ui_from_profile(profile)
+
+            # Update recent profiles
+            self.config_store.update_recent_profiles(slug)
+
+            # Update window title
+            self.setWindowTitle(
+                f"Rank Rocket Watermark Wizard v3.0.0 - {profile.profile.name}"
+            )
+
+            # Update status bar
+            self.update_status_bar(profile)
+
+            # Update recent profiles menu
+            self.update_recent_profiles_menu()
+
+            # Switch to Watermark tab
+            if self.ai_tab_widget:
+                self.ai_tab_widget.setCurrentIndex(0)  # Watermark tab
+
+            QMessageBox.information(
+                self,
+                "Profile Loaded",
+                f"Loaded profile: {profile.profile.name}\n\n"
+                f"QR Link: {profile.watermark.qr_link}\n"
+                f"Input Dir: {profile.paths.input_dir}",
+            )
+
+        except FileNotFoundError:
+            QMessageBox.critical(
+                self, "Profile Not Found", f"Profile '{slug}' does not exist."
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Load Error", f"Failed to load profile: {str(e)}"
+            )
+            import traceback
+
+            traceback.print_exc()
+
+    def update_ui_from_profile(self, profile: ClientProfile) -> None:
+        """Populate UI fields from ClientProfile"""
+        try:
+            # Paths
+            self.ui.inputDir.setText(profile.paths.input_dir)
+            self.ui.outputDir.setText(profile.paths.output_dir)
+
+            # Watermark settings
+            self.ui.qrLink.setText(profile.watermark.qr_link)
+            self.ui.overlayText.setPlainText(profile.watermark.text_overlay)
+
+            # Font family
+            if self.font_family_combo:
+                font = QFont(profile.watermark.font_family)
+                self.font_family_combo.setCurrentFont(font)
+
+            # Font size (in points)
+            font_pt = profile.watermark.font_size
+            font_pt = max(8, min(200, font_pt))  # Clamp to reasonable range
+
+            if self.font_size_combo:
+                font_text = f"{font_pt}pt"
+                index = self.font_size_combo.findText(font_text)
+                if index >= 0:
+                    self.font_size_combo.setCurrentIndex(index)
+
+            # Padding sliders (direct pixel values)
+            text_px = profile.watermark.text_padding
+            text_px = max(0, min(500, text_px))
+            self.ui.textPaddingSlider.setValue(text_px)
+
+            qr_px = profile.watermark.qr_padding
+            qr_px = max(0, min(300, qr_px))
+            self.ui.qrPaddingSlider.setValue(qr_px)
+
+            # SEO settings
+            self.ui.seoRenameCheck.setChecked(profile.seo_naming.enabled)
+
+            # Update extra controls if they exist
+            if hasattr(self, "recursiveCheck") and self.recursiveCheck:
+                self.recursiveCheck.setChecked(profile.seo_naming.process_recursive)
+
+            if hasattr(self, "collisionCombo") and self.collisionCombo:
+                idx = self.collisionCombo.findText(
+                    profile.seo_naming.collision_strategy
+                )
+                if idx >= 0:
+                    self.collisionCombo.setCurrentIndex(idx)
+
+            if hasattr(self, "slugPrefixEdit") and self.slugPrefixEdit:
+                self.slugPrefixEdit.setText(profile.seo_naming.slug_prefix)
+
+            if hasattr(self, "slugLocationEdit") and self.slugLocationEdit:
+                self.slugLocationEdit.setText(profile.seo_naming.slug_location)
+
+            # Update internal config dict for backwards compatibility
+            self.config = {
+                "input_dir": profile.paths.input_dir,
+                "output_dir": profile.paths.output_dir,
+                "qr_link": profile.watermark.qr_link,
+                "text_overlay": profile.watermark.text_overlay,
+                "font_family": profile.watermark.font_family,
+                "font_size": profile.watermark.font_size,
+                "text_padding": profile.watermark.text_padding,
+                "qr_padding": profile.watermark.qr_padding,
+                "seo_rename": profile.seo_naming.enabled,
+                "process_recursive": profile.seo_naming.process_recursive,
+                "collision_strategy": profile.seo_naming.collision_strategy,
+                "slug_prefix": profile.seo_naming.slug_prefix,
+                "slug_location": profile.seo_naming.slug_location,
+                "slug_max_words": profile.seo_naming.slug_max_words,
+                "slug_min_len": profile.seo_naming.slug_min_len,
+                "slug_stopwords": profile.seo_naming.slug_stopwords,
+                "slug_whitelist": profile.seo_naming.slug_whitelist,
+                "text_color": profile.watermark.text_color,
+                "shadow_color": profile.watermark.shadow_color,
+                "qr_size": profile.watermark.qr_size,
+                "qr_opacity": profile.watermark.qr_opacity,
+            }
+
+            print(f"UI updated from profile: {profile.profile.slug}")
+
+        except Exception as e:
+            print(f"Error updating UI from profile: {e}")
+            import traceback
+
+            traceback.print_exc()
+            raise
+
+    def update_active_profile_from_ui(self) -> None:
+        """Update active profile fields from current UI state"""
+        if not hasattr(self, "active_profile") or not self.active_profile:
+            return
+
+        try:
+            from datetime import datetime
+
+            # Update paths
+            self.active_profile.paths.input_dir = self.ui.inputDir.text()
+            self.active_profile.paths.output_dir = self.ui.outputDir.text()
+
+            # Update watermark
+            self.active_profile.watermark.qr_link = self.ui.qrLink.text()
+            self.active_profile.watermark.text_overlay = (
+                self.ui.overlayText.toPlainText()
+            )
+
+            # Font family
+            if self.font_family_combo:
+                self.active_profile.watermark.font_family = (
+                    self.font_family_combo.currentFont().family()
+                )
+
+            # Font size (in points)
+            if self.font_size_combo:
+                font_text = self.font_size_combo.currentText()
+                if font_text.endswith("pt"):
+                    font_pt = int(font_text[:-2])
+                    self.active_profile.watermark.font_size = font_pt
+
+            # Padding (direct pixel values)
+            text_px = self.ui.textPaddingSlider.value()
+            self.active_profile.watermark.text_padding = text_px
+
+            qr_px = self.ui.qrPaddingSlider.value()
+            self.active_profile.watermark.qr_padding = qr_px
+
+            # SEO settings
+            self.active_profile.seo_naming.enabled = self.ui.seoRenameCheck.isChecked()
+
+            if hasattr(self, "recursiveCheck") and self.recursiveCheck:
+                self.active_profile.seo_naming.process_recursive = (
+                    self.recursiveCheck.isChecked()
+                )
+
+            if hasattr(self, "collisionCombo") and self.collisionCombo:
+                self.active_profile.seo_naming.collision_strategy = (
+                    self.collisionCombo.currentText()
+                )
+
+            if hasattr(self, "slugPrefixEdit") and self.slugPrefixEdit:
+                self.active_profile.seo_naming.slug_prefix = (
+                    self.slugPrefixEdit.text().strip()
+                )
+
+            if hasattr(self, "slugLocationEdit") and self.slugLocationEdit:
+                self.active_profile.seo_naming.slug_location = (
+                    self.slugLocationEdit.text().strip()
+                )
+
+            # Update modified timestamp
+            self.active_profile.profile.modified = datetime.now().strftime("%Y-%m-%d")
+
+        except Exception as e:
+            print(f"Error updating active profile from UI: {e}")
+            import traceback
+
+            traceback.print_exc()
+            raise
+
+    def show_profile_editor(self, slug: Optional[str]) -> None:
+        """Show profile editor dialog (create or edit)"""
+        try:
+            from datetime import datetime
+
+            if not self.config_store:
+                self.config_store = ConfigStore()
+
+            # Load existing profile or create new
+            if slug:
+                profile = self.config_store.load_profile(slug)
+                dialog_title = f"Edit Profile: {profile.profile.name}"
+            else:
+                # Create new profile with defaults
+                from qrmr.config_schema import (
+                    ClientProfile,
+                    GenerationConfig,
+                    PathsConfig,
+                    ProfileMetadata,
+                    ProvidersConfig,
+                    SEONamingConfig,
+                    UploadConfig,
+                    WatermarkConfig,
+                )
+
+                now = datetime.now().strftime("%Y-%m-%d")
+                profile = ClientProfile(
+                    profile=ProfileMetadata(
+                        name="New Client",
+                        slug="new-client",
+                        client_id="new_client",
+                        created=now,
+                        modified=now,
+                    ),
+                    paths=PathsConfig(
+                        generation_output_dir="",
+                        input_dir="",
+                        output_dir="",
+                        archive_dir=None,
+                    ),
+                    generation=GenerationConfig(),
+                    providers=ProvidersConfig(),
+                    watermark=WatermarkConfig(
+                        qr_link="https://example.com", text_overlay=""
+                    ),
+                    seo_naming=SEONamingConfig(),
+                    upload=UploadConfig(),
+                )
+                dialog_title = "Create New Profile"
+
+            # Create dialog
+            dialog = QDialog(self)
+            dialog.setWindowTitle(dialog_title)
+            dialog.setModal(True)
+            dialog.resize(700, 600)
+
+            layout = QVBoxLayout(dialog)
+
+            # Create tab widget for sections
+            tab_widget = QTabWidget()
+
+            # Tab 1: Profile Metadata
+            metadata_tab = self._create_metadata_tab(profile)
+            tab_widget.addTab(metadata_tab, "Profile Info")
+
+            # Tab 2: Paths
+            paths_tab = self._create_paths_tab(profile)
+            tab_widget.addTab(paths_tab, "Paths")
+
+            # Tab 3: Watermark
+            watermark_tab = self._create_watermark_tab(profile)
+            tab_widget.addTab(watermark_tab, "Watermark")
+
+            # Tab 4: SEO Naming
+            seo_tab = self._create_seo_tab(profile)
+            tab_widget.addTab(seo_tab, "SEO Naming")
+
+            # Tab 5: AI Generation (optional)
+            generation_tab = self._create_generation_tab(profile)
+            tab_widget.addTab(generation_tab, "AI Generation")
+
+            layout.addWidget(tab_widget)
+
+            # Button box
+            button_box = QHBoxLayout()
+
+            save_btn = QPushButton("Save Profile")
+            save_btn.setStyleSheet(
+                "background-color: #28a745; color: white; padding: 8px 16px; font-weight: bold;"
+            )
+            save_btn.clicked.connect(
+                lambda: self._save_profile_from_dialog(dialog, profile, slug)
+            )
+
+            cancel_btn = QPushButton("Cancel")
+            cancel_btn.setStyleSheet("padding: 8px 16px;")
+            cancel_btn.clicked.connect(dialog.reject)
+
+            button_box.addStretch()
+            button_box.addWidget(cancel_btn)
+            button_box.addWidget(save_btn)
+
+            layout.addLayout(button_box)
+
+            dialog.exec()
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Editor Error", f"Failed to open profile editor: {str(e)}"
+            )
+            import traceback
+
+            traceback.print_exc()
+
+    def _create_metadata_tab(self, profile: ClientProfile) -> QWidget:
+        """Create Profile Metadata tab"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        group = QGroupBox("Profile Information")
+        form = QGridLayout()
+
+        # Name
+        form.addWidget(QLabel("Profile Name:"), 0, 0)
+        name_edit = QLineEdit(profile.profile.name)
+        name_edit.setObjectName("name_edit")
+        form.addWidget(name_edit, 0, 1)
+
+        # Slug (auto-generated from name)
+        form.addWidget(QLabel("Slug (URL-friendly):"), 1, 0)
+        slug_edit = QLineEdit(profile.profile.slug)
+        slug_edit.setObjectName("slug_edit")
+        slug_edit.setPlaceholderText("Auto-generated from name")
+        form.addWidget(slug_edit, 1, 1)
+
+        # Auto-generate slug button
+        auto_slug_btn = QPushButton("Auto-Generate Slug")
+        auto_slug_btn.clicked.connect(
+            lambda: self._auto_generate_slug(name_edit, slug_edit)
+        )
+        form.addWidget(auto_slug_btn, 1, 2)
+
+        # Client ID
+        form.addWidget(QLabel("Client ID:"), 2, 0)
+        client_id_edit = QLineEdit(profile.profile.client_id)
+        client_id_edit.setObjectName("client_id_edit")
+        form.addWidget(client_id_edit, 2, 1)
+
+        # Created/Modified (read-only)
+        form.addWidget(QLabel("Created:"), 3, 0)
+        created_label = QLabel(profile.profile.created)
+        created_label.setStyleSheet("color: #666;")
+        form.addWidget(created_label, 3, 1)
+
+        form.addWidget(QLabel("Last Modified:"), 4, 0)
+        modified_label = QLabel(profile.profile.modified)
+        modified_label.setStyleSheet("color: #666;")
+        form.addWidget(modified_label, 4, 1)
+
+        group.setLayout(form)
+        layout.addWidget(group)
+        layout.addStretch()
+
+        return widget
+
+    def _create_paths_tab(self, profile: ClientProfile) -> QWidget:
+        """Create Paths Configuration tab"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        group = QGroupBox("Directory Paths")
+        form = QGridLayout()
+
+        # Input Directory
+        form.addWidget(QLabel("Input Directory:"), 0, 0)
+        input_dir_edit = QLineEdit(profile.paths.input_dir)
+        input_dir_edit.setObjectName("input_dir_edit")
+        form.addWidget(input_dir_edit, 0, 1)
+        input_browse_btn = QPushButton("Browse...")
+        input_browse_btn.clicked.connect(lambda: self._browse_directory(input_dir_edit))
+        form.addWidget(input_browse_btn, 0, 2)
+
+        # Output Directory
+        form.addWidget(QLabel("Output Directory:"), 1, 0)
+        output_dir_edit = QLineEdit(profile.paths.output_dir)
+        output_dir_edit.setObjectName("output_dir_edit")
+        form.addWidget(output_dir_edit, 1, 1)
+        output_browse_btn = QPushButton("Browse...")
+        output_browse_btn.clicked.connect(
+            lambda: self._browse_directory(output_dir_edit)
+        )
+        form.addWidget(output_browse_btn, 1, 2)
+
+        # Generation Output Directory
+        form.addWidget(QLabel("AI Generation Output:"), 2, 0)
+        gen_dir_edit = QLineEdit(profile.paths.generation_output_dir)
+        gen_dir_edit.setObjectName("gen_dir_edit")
+        form.addWidget(gen_dir_edit, 2, 1)
+        gen_browse_btn = QPushButton("Browse...")
+        gen_browse_btn.clicked.connect(lambda: self._browse_directory(gen_dir_edit))
+        form.addWidget(gen_browse_btn, 2, 2)
+
+        # Archive Directory (optional)
+        form.addWidget(QLabel("Archive Directory (optional):"), 3, 0)
+        archive_dir_edit = QLineEdit(profile.paths.archive_dir or "")
+        archive_dir_edit.setObjectName("archive_dir_edit")
+        form.addWidget(archive_dir_edit, 3, 1)
+        archive_browse_btn = QPushButton("Browse...")
+        archive_browse_btn.clicked.connect(
+            lambda: self._browse_directory(archive_dir_edit)
+        )
+        form.addWidget(archive_browse_btn, 3, 2)
+
+        group.setLayout(form)
+        layout.addWidget(group)
+        layout.addStretch()
+
+        return widget
+
+    def _create_watermark_tab(self, profile: ClientProfile) -> QWidget:
+        """Create Watermark Settings tab"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        # Scroll area for all settings
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+
+        # QR Code Settings Group
+        qr_group = QGroupBox("QR Code Settings")
+        qr_form = QGridLayout()
+
+        qr_form.addWidget(QLabel("QR Link URL:"), 0, 0)
+        qr_link_edit = QLineEdit(profile.watermark.qr_link)
+        qr_link_edit.setObjectName("qr_link_edit")
+        qr_form.addWidget(qr_link_edit, 0, 1)
+
+        qr_form.addWidget(QLabel("QR Size (pixels):"), 1, 0)
+        qr_size_spin = QSpinBox()
+        qr_size_spin.setObjectName("qr_size_spin")
+        qr_size_spin.setRange(50, 500)
+        qr_size_spin.setSingleStep(10)
+        qr_size_spin.setValue(profile.watermark.qr_size)
+        qr_form.addWidget(qr_size_spin, 1, 1)
+
+        qr_form.addWidget(QLabel("QR Opacity (0.0-1.0):"), 2, 0)
+        qr_opacity_spin = QDoubleSpinBox()
+        qr_opacity_spin.setObjectName("qr_opacity_spin")
+        qr_opacity_spin.setRange(0.0, 1.0)
+        qr_opacity_spin.setSingleStep(0.05)
+        qr_opacity_spin.setValue(profile.watermark.qr_opacity)
+        qr_form.addWidget(qr_opacity_spin, 2, 1)
+
+        qr_form.addWidget(QLabel("QR Padding (pixels):"), 3, 0)
+        qr_padding_spin = QSpinBox()
+        qr_padding_spin.setObjectName("qr_padding_spin")
+        qr_padding_spin.setRange(0, 100)
+        qr_padding_spin.setSingleStep(5)
+        qr_padding_spin.setValue(profile.watermark.qr_padding)
+        qr_form.addWidget(qr_padding_spin, 3, 1)
+
+        qr_group.setLayout(qr_form)
+        scroll_layout.addWidget(qr_group)
+
+        # Text Overlay Settings Group
+        text_group = QGroupBox("Text Overlay Settings")
+        text_form = QGridLayout()
+
+        text_form.addWidget(QLabel("Text Overlay:"), 0, 0)
+        text_overlay_edit = QTextEdit()
+        text_overlay_edit.setObjectName("text_overlay_edit")
+        text_overlay_edit.setPlainText(profile.watermark.text_overlay)
+        text_overlay_edit.setMaximumHeight(60)
+        text_form.addWidget(text_overlay_edit, 0, 1)
+
+        text_form.addWidget(QLabel("Font Family:"), 1, 0)
+        font_family_combo = QFontComboBox()
+        font_family_combo.setObjectName("font_family_combo")
+        font_family_combo.setCurrentFont(QFont(profile.watermark.font_family))
+        text_form.addWidget(font_family_combo, 1, 1)
+
+        text_form.addWidget(QLabel("Font Size (pt):"), 2, 0)
+        font_size_spin = QSpinBox()
+        font_size_spin.setObjectName("font_size_spin")
+        font_size_spin.setRange(8, 200)
+        font_size_spin.setSingleStep(1)
+        font_size_spin.setValue(profile.watermark.font_size)
+        text_form.addWidget(font_size_spin, 2, 1)
+
+        text_form.addWidget(QLabel("Text Padding (pixels):"), 3, 0)
+        text_padding_spin = QSpinBox()
+        text_padding_spin.setObjectName("text_padding_spin")
+        text_padding_spin.setRange(0, 500)
+        text_padding_spin.setSingleStep(10)
+        text_padding_spin.setValue(profile.watermark.text_padding)
+        text_form.addWidget(text_padding_spin, 3, 1)
+
+        text_group.setLayout(text_form)
+        scroll_layout.addWidget(text_group)
+
+        scroll.setWidget(scroll_content)
+        layout.addWidget(scroll)
+
+        return widget
+
+    def _create_seo_tab(self, profile: ClientProfile) -> QWidget:
+        """Create SEO Naming tab"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        group = QGroupBox("SEO Filename Settings")
+        form = QGridLayout()
+
+        # Enabled checkbox
+        form.addWidget(QLabel("Enable SEO Renaming:"), 0, 0)
+        seo_enabled_check = QCheckBox()
+        seo_enabled_check.setObjectName("seo_enabled_check")
+        seo_enabled_check.setChecked(profile.seo_naming.enabled)
+        form.addWidget(seo_enabled_check, 0, 1)
+
+        # Slug Prefix
+        form.addWidget(QLabel("Slug Prefix:"), 1, 0)
+        slug_prefix_edit = QLineEdit(profile.seo_naming.slug_prefix)
+        slug_prefix_edit.setObjectName("slug_prefix_edit")
+        slug_prefix_edit.setPlaceholderText("e.g., best-dumpster-rental")
+        form.addWidget(slug_prefix_edit, 1, 1)
+
+        # Slug Location
+        form.addWidget(QLabel("Slug Location:"), 2, 0)
+        slug_location_edit = QLineEdit(profile.seo_naming.slug_location)
+        slug_location_edit.setObjectName("slug_location_edit")
+        slug_location_edit.setPlaceholderText("e.g., Tampa, Chicago")
+        form.addWidget(slug_location_edit, 2, 1)
+
+        # Process Recursive
+        form.addWidget(QLabel("Process Subfolders:"), 3, 0)
+        recursive_check = QCheckBox()
+        recursive_check.setObjectName("recursive_check")
+        recursive_check.setChecked(profile.seo_naming.process_recursive)
+        form.addWidget(recursive_check, 3, 1)
+
+        # Collision Strategy
+        form.addWidget(QLabel("Collision Strategy:"), 4, 0)
+        collision_combo = QComboBox()
+        collision_combo.setObjectName("collision_combo")
+        collision_combo.addItems(["counter", "timestamp"])
+        idx = collision_combo.findText(profile.seo_naming.collision_strategy)
+        if idx >= 0:
+            collision_combo.setCurrentIndex(idx)
+        form.addWidget(collision_combo, 4, 1)
+
+        # Max Words
+        form.addWidget(QLabel("Max Words in Slug:"), 5, 0)
+        max_words_spin = QSpinBox()
+        max_words_spin.setObjectName("max_words_spin")
+        max_words_spin.setRange(1, 15)
+        max_words_spin.setValue(profile.seo_naming.slug_max_words)
+        form.addWidget(max_words_spin, 5, 1)
+
+        # Min Length
+        form.addWidget(QLabel("Min Slug Length:"), 6, 0)
+        min_len_spin = QSpinBox()
+        min_len_spin.setObjectName("min_len_spin")
+        min_len_spin.setRange(1, 10)
+        min_len_spin.setValue(profile.seo_naming.slug_min_len)
+        form.addWidget(min_len_spin, 6, 1)
+
+        group.setLayout(form)
+        layout.addWidget(group)
+        layout.addStretch()
+
+        return widget
+
+    def _create_generation_tab(self, profile: ClientProfile) -> QWidget:
+        """Create AI Generation Settings tab"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        group = QGroupBox("AI Generation Settings (Optional)")
+        form = QGridLayout()
+
+        # Mode
+        form.addWidget(QLabel("Generation Mode:"), 0, 0)
+        gen_mode_combo = QComboBox()
+        gen_mode_combo.setObjectName("gen_mode_combo")
+        gen_mode_combo.addItems(["auto", "manual", "disabled"])
+        idx = gen_mode_combo.findText(profile.generation.mode)
+        if idx >= 0:
+            gen_mode_combo.setCurrentIndex(idx)
+        form.addWidget(gen_mode_combo, 0, 1)
+
+        # Count
+        form.addWidget(QLabel("Images to Generate:"), 1, 0)
+        gen_count_spin = QSpinBox()
+        gen_count_spin.setObjectName("gen_count_spin")
+        gen_count_spin.setRange(1, 10)
+        gen_count_spin.setValue(profile.generation.count)
+        form.addWidget(gen_count_spin, 1, 1)
+
+        # Dimensions
+        form.addWidget(QLabel("Width:"), 2, 0)
+        gen_width_spin = QSpinBox()
+        gen_width_spin.setObjectName("gen_width_spin")
+        gen_width_spin.setRange(256, 2048)
+        gen_width_spin.setSingleStep(64)
+        gen_width_spin.setValue(profile.generation.width)
+        form.addWidget(gen_width_spin, 2, 1)
+
+        form.addWidget(QLabel("Height:"), 3, 0)
+        gen_height_spin = QSpinBox()
+        gen_height_spin.setObjectName("gen_height_spin")
+        gen_height_spin.setRange(256, 2048)
+        gen_height_spin.setSingleStep(64)
+        gen_height_spin.setValue(profile.generation.height)
+        form.addWidget(gen_height_spin, 3, 1)
+
+        group.setLayout(form)
+        layout.addWidget(group)
+        layout.addStretch()
+
+        return widget
+
+    def _auto_generate_slug(self, name_edit: QLineEdit, slug_edit: QLineEdit) -> None:
+        """Auto-generate slug from profile name"""
+        name = name_edit.text()
+        slug = slugify(name)
+        slug_edit.setText(slug)
+
+    def _browse_directory(self, line_edit: QLineEdit) -> None:
+        """Browse for directory and update line edit"""
+        start_dir = line_edit.text() or os.getcwd()
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Directory", start_dir
+        )
+        if directory:
+            line_edit.setText(directory)
+
+    def _save_profile_from_dialog(
+        self, dialog: QDialog, profile: ClientProfile, original_slug: Optional[str]
+    ) -> None:
+        """Save profile from dialog widgets"""
+        try:
+            from datetime import datetime
+
+            # Initialize config_store if needed
+            if not self.config_store:
+                self.config_store = ConfigStore()
+
+            # Extract values from dialog widgets (using findChild)
+
+            # Metadata
+            name_edit = dialog.findChild(QLineEdit, "name_edit")
+            slug_edit = dialog.findChild(QLineEdit, "slug_edit")
+            client_id_edit = dialog.findChild(QLineEdit, "client_id_edit")
+
+            if not name_edit or not slug_edit or not client_id_edit:
+                raise ValueError("Required metadata fields not found")
+
+            new_slug = slug_edit.text().strip()
+            if not new_slug:
+                QMessageBox.warning(self, "Validation Error", "Slug cannot be empty")
+                return
+
+            # Check slug uniqueness (if creating new or slug changed)
+            if new_slug != original_slug:
+                if self.config_store.profile_exists(new_slug):
+                    QMessageBox.warning(
+                        self,
+                        "Slug Exists",
+                        f"Profile with slug '{new_slug}' already exists. Please choose a different slug.",
+                    )
+                    return
+
+            # Update profile metadata
+            profile.profile.name = name_edit.text().strip()
+            profile.profile.slug = new_slug
+            profile.profile.client_id = client_id_edit.text().strip()
+            profile.profile.modified = datetime.now().strftime("%Y-%m-%d")
+
+            # Paths
+            input_dir_edit = dialog.findChild(QLineEdit, "input_dir_edit")
+            output_dir_edit = dialog.findChild(QLineEdit, "output_dir_edit")
+            gen_dir_edit = dialog.findChild(QLineEdit, "gen_dir_edit")
+            archive_dir_edit = dialog.findChild(QLineEdit, "archive_dir_edit")
+
+            if input_dir_edit:
+                profile.paths.input_dir = input_dir_edit.text().strip()
+            if output_dir_edit:
+                profile.paths.output_dir = output_dir_edit.text().strip()
+            if gen_dir_edit:
+                profile.paths.generation_output_dir = gen_dir_edit.text().strip()
+            if archive_dir_edit:
+                archive_val = archive_dir_edit.text().strip()
+                profile.paths.archive_dir = archive_val if archive_val else None
+
+            # Watermark
+            qr_link_edit = dialog.findChild(QLineEdit, "qr_link_edit")
+            if qr_link_edit:
+                qr_link = qr_link_edit.text().strip()
+                if not qr_link.startswith("http"):
+                    QMessageBox.warning(
+                        self,
+                        "Validation Error",
+                        "QR Link must be a valid URL starting with http:// or https://",
+                    )
+                    return
+                profile.watermark.qr_link = qr_link
+
+            qr_size_spin = dialog.findChild(QSpinBox, "qr_size_spin")
+            if qr_size_spin:
+                profile.watermark.qr_size = qr_size_spin.value()
+
+            qr_opacity_spin = dialog.findChild(QDoubleSpinBox, "qr_opacity_spin")
+            if qr_opacity_spin:
+                profile.watermark.qr_opacity = qr_opacity_spin.value()
+
+            qr_padding_spin = dialog.findChild(QSpinBox, "qr_padding_spin")
+            if qr_padding_spin:
+                profile.watermark.qr_padding = qr_padding_spin.value()
+
+            text_overlay_edit = dialog.findChild(QTextEdit, "text_overlay_edit")
+            if text_overlay_edit:
+                profile.watermark.text_overlay = text_overlay_edit.toPlainText()
+
+            font_family_combo = dialog.findChild(QFontComboBox, "font_family_combo")
+            if font_family_combo:
+                profile.watermark.font_family = font_family_combo.currentFont().family()
+
+            font_size_spin = dialog.findChild(QSpinBox, "font_size_spin")
+            if font_size_spin:
+                profile.watermark.font_size = font_size_spin.value()
+
+            text_padding_spin = dialog.findChild(QSpinBox, "text_padding_spin")
+            if text_padding_spin:
+                profile.watermark.text_padding = text_padding_spin.value()
+
+            # SEO Naming
+            seo_enabled_check = dialog.findChild(QCheckBox, "seo_enabled_check")
+            if seo_enabled_check:
+                profile.seo_naming.enabled = seo_enabled_check.isChecked()
+
+            slug_prefix_edit = dialog.findChild(QLineEdit, "slug_prefix_edit")
+            if slug_prefix_edit:
+                profile.seo_naming.slug_prefix = slug_prefix_edit.text().strip()
+
+            slug_location_edit = dialog.findChild(QLineEdit, "slug_location_edit")
+            if slug_location_edit:
+                profile.seo_naming.slug_location = slug_location_edit.text().strip()
+
+            recursive_check = dialog.findChild(QCheckBox, "recursive_check")
+            if recursive_check:
+                profile.seo_naming.process_recursive = recursive_check.isChecked()
+
+            collision_combo = dialog.findChild(QComboBox, "collision_combo")
+            if collision_combo:
+                profile.seo_naming.collision_strategy = collision_combo.currentText()
+
+            max_words_spin = dialog.findChild(QSpinBox, "max_words_spin")
+            if max_words_spin:
+                profile.seo_naming.slug_max_words = max_words_spin.value()
+
+            min_len_spin = dialog.findChild(QSpinBox, "min_len_spin")
+            if min_len_spin:
+                profile.seo_naming.slug_min_len = min_len_spin.value()
+
+            # Generation (optional)
+            gen_mode_combo = dialog.findChild(QComboBox, "gen_mode_combo")
+            if gen_mode_combo:
+                profile.generation.mode = gen_mode_combo.currentText()
+
+            gen_count_spin = dialog.findChild(QSpinBox, "gen_count_spin")
+            if gen_count_spin:
+                profile.generation.count = gen_count_spin.value()
+
+            gen_width_spin = dialog.findChild(QSpinBox, "gen_width_spin")
+            if gen_width_spin:
+                profile.generation.width = gen_width_spin.value()
+
+            gen_height_spin = dialog.findChild(QSpinBox, "gen_height_spin")
+            if gen_height_spin:
+                profile.generation.height = gen_height_spin.value()
+
+            # Save profile
+            self.config_store.save_profile(profile)
+
+            # If slug changed and we're editing, delete old profile
+            if original_slug and original_slug != new_slug:
+                self.config_store.delete_profile(original_slug)
+
+            # Close dialog
+            dialog.accept()
+
+            # Refresh profile list
+            self.refresh_profile_list()
+
+            # Show success message
+            QMessageBox.information(
+                self,
+                "Profile Saved",
+                f"Profile '{profile.profile.name}' saved successfully!",
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Save Error", f"Failed to save profile: {str(e)}"
+            )
+            import traceback
+
+            traceback.print_exc()
+
+    def delete_profile_with_confirmation(self, slug: str) -> None:
+        """Delete profile after confirmation"""
+        try:
+            if not self.config_store:
+                self.config_store = ConfigStore()
+
+            # Load profile to get name
+            try:
+                profile = self.config_store.load_profile(slug)
+                profile_name = profile.profile.name
+            except Exception:
+                profile_name = slug
+
+            # Confirmation dialog
+            reply = QMessageBox.question(
+                self,
+                "Confirm Delete",
+                f"Are you sure you want to delete profile:\n\n{profile_name} ({slug})\n\n"
+                "This action cannot be undone.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+
+            if reply == QMessageBox.StandardButton.Yes:
+                # Check if this is the active profile
+                if hasattr(self, "active_profile") and self.active_profile:
+                    if self.active_profile.profile.slug == slug:
+                        # Clear active profile
+                        self.active_profile = None
+                        self.setWindowTitle("Rank Rocket Watermark Wizard v3.0.0")
+                        self.update_status_bar(None)
+
+                # Delete profile
+                self.config_store.delete_profile(slug)
+
+                # Refresh list
+                self.refresh_profile_list()
+
+                QMessageBox.information(
+                    self,
+                    "Profile Deleted",
+                    f"Profile '{profile_name}' has been deleted.",
+                )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Delete Error", f"Failed to delete profile: {str(e)}"
+            )
+            import traceback
+
+            traceback.print_exc()
+
+    def duplicate_profile(self, slug: str) -> None:
+        """Duplicate an existing profile"""
+        try:
+            from datetime import datetime
+
+            if not self.config_store:
+                self.config_store = ConfigStore()
+
+            # Load original profile
+            profile = self.config_store.load_profile(slug)
+
+            # Create new slug
+            base_slug = f"{slug}-copy"
+            new_slug = base_slug
+            counter = 1
+            while self.config_store.profile_exists(new_slug):
+                new_slug = f"{base_slug}-{counter}"
+                counter += 1
+
+            # Update metadata
+            profile.profile.name = f"{profile.profile.name} (Copy)"
+            profile.profile.slug = new_slug
+            profile.profile.created = datetime.now().strftime("%Y-%m-%d")
+            profile.profile.modified = datetime.now().strftime("%Y-%m-%d")
+
+            # Save duplicate
+            self.config_store.save_profile(profile)
+
+            # Refresh list
+            self.refresh_profile_list()
+
+            QMessageBox.information(
+                self,
+                "Profile Duplicated",
+                f"Profile duplicated as: {profile.profile.name}\n\nSlug: {new_slug}",
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Duplicate Error", f"Failed to duplicate profile: {str(e)}"
+            )
+            import traceback
+
+            traceback.print_exc()
+
+    def migrate_legacy_settings(self) -> Optional[ClientProfile]:
+        """Migrate settings.json to default-client profile"""
+        try:
+            from datetime import datetime
+            from qrmr.config_schema import (
+                ClientProfile,
+                GenerationConfig,
+                PathsConfig,
+                ProfileMetadata,
+                ProvidersConfig,
+                SEONamingConfig,
+                UploadConfig,
+                WatermarkConfig,
+            )
+
+            settings_path = "config/settings.json"
+            if not os.path.exists(settings_path):
+                print("No settings.json found - skipping migration")
+                return None
+
+            # Load legacy settings
+            legacy_config = load_config(settings_path)
+
+            print("Migrating legacy settings.json to ClientProfile...")
+
+            # Create default profile from legacy settings
+            now = datetime.now().strftime("%Y-%m-%d")
+
+            # Determine generation_output_dir based on input_dir
+            input_dir = legacy_config.get("input_dir", "")
+            if input_dir:
+                # Create sibling directory for AI-generated images
+                # E.g., if input_dir is "D:/Clients/ABC/images/original"
+                # then generation_output_dir is "D:/Clients/ABC/images/generated"
+                parent_dir = os.path.dirname(input_dir)
+                generation_output_dir = os.path.join(parent_dir, "generated")
+            else:
+                # Fallback to local directory
+                generation_output_dir = "./generated_images"
+
+            profile = ClientProfile(
+                profile=ProfileMetadata(
+                    name="Default Client (Migrated)",
+                    slug="default-client",
+                    client_id="default",
+                    created=now,
+                    modified=now,
+                ),
+                paths=PathsConfig(
+                    generation_output_dir=generation_output_dir,
+                    input_dir=input_dir,
+                    output_dir=legacy_config.get("output_dir", ""),
+                    archive_dir=None,
+                ),
+                generation=GenerationConfig(),  # Use defaults
+                providers=ProvidersConfig(),  # Use defaults
+                watermark=WatermarkConfig(
+                    qr_link=legacy_config.get("qr_link", "https://example.com"),
+                    qr_size=legacy_config.get("qr_size", 150),  # Default 150px
+                    qr_opacity=legacy_config.get("qr_opacity", 0.85),
+                    qr_padding=legacy_config.get("qr_padding", 15),  # Default 15px
+                    text_overlay=legacy_config.get("text_overlay", ""),
+                    text_color=legacy_config.get("text_color", [255, 255, 255]),
+                    shadow_color=legacy_config.get("shadow_color", [0, 0, 0, 128]),
+                    font_family=legacy_config.get("font_family", "arial"),
+                    font_size=legacy_config.get("font_size", 72),  # Default 72pt
+                    text_padding=legacy_config.get("text_padding", 40),  # Default 40px
+                ),
+                seo_naming=SEONamingConfig(
+                    enabled=legacy_config.get("seo_rename", False),
+                    process_recursive=legacy_config.get("process_recursive", False),
+                    collision_strategy=legacy_config.get(
+                        "collision_strategy", "counter"
+                    ),
+                    slug_prefix=legacy_config.get("slug_prefix", ""),
+                    slug_location=legacy_config.get("slug_location", ""),
+                    slug_max_words=legacy_config.get("slug_max_words", 6),
+                    slug_min_len=legacy_config.get("slug_min_len", 3),
+                    slug_stopwords=legacy_config.get("slug_stopwords", []),
+                    slug_whitelist=legacy_config.get("slug_whitelist", []),
+                ),
+                upload=UploadConfig(),  # Use defaults
+            )
+
+            # Save migrated profile
+            if not self.config_store:
+                self.config_store = ConfigStore()
+
+            self.config_store.save_profile(profile)
+
+            # Backup original settings.json
+            backup_path = f"config/settings.json.backup-{now}"
+            import shutil
+
+            shutil.copy(settings_path, backup_path)
+
+            print("Migration complete! Profile saved as 'default-client'")
+            print(f"Original settings.json backed up to: {backup_path}")
+
+            return profile
+
+        except Exception as e:
+            print(f"Migration error: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return None
+
+    def check_and_load_default_profile(self) -> None:
+        """Check for profiles on startup and load default or migrate"""
+        try:
+            if not self.config_store:
+                self.config_store = ConfigStore()
+
+            # Load app settings
+            app_settings = self.config_store.load_app_settings()
+
+            # Check if we have profiles
+            profiles = self.config_store.list_profiles()
+
+            if not profiles:
+                print("No profiles found - checking for legacy settings.json...")
+
+                # Attempt migration
+                migrated_profile = self.migrate_legacy_settings()
+
+                if migrated_profile:
+                    # Load migrated profile
+                    self.load_profile_into_ui("default-client")
+
+                    QMessageBox.information(
+                        self,
+                        "Settings Migrated",
+                        "Your settings have been migrated to the new profile system!\n\n"
+                        "Profile: Default Client (Migrated)\n\n"
+                        "You can now create additional profiles for different clients.",
+                    )
+                else:
+                    print("No legacy settings found - starting fresh")
+
+            elif app_settings.last_used_profile:
+                # Load last used profile
+                if self.config_store.profile_exists(app_settings.last_used_profile):
+                    print(
+                        f"Loading last used profile: {app_settings.last_used_profile}"
+                    )
+                    self.load_profile_into_ui(app_settings.last_used_profile)
+                else:
+                    print(
+                        f"Last used profile '{app_settings.last_used_profile}' not found"
+                    )
+
+        except Exception as e:
+            print(f"Error during startup profile check: {e}")
+            import traceback
+
+            traceback.print_exc()
 
 
 if __name__ == "__main__":

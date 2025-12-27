@@ -86,15 +86,15 @@ class WatermarkConfig:
     """QR code and text watermark settings."""
 
     qr_link: str
-    qr_size_ratio: float = 0.15
+    qr_size: int = 150  # QR code size in pixels
     qr_opacity: float = 0.85
-    qr_padding_vh_ratio: float = 0.015
+    qr_padding: int = 15  # QR padding in pixels
     text_overlay: str = ""
     text_color: List[int] = field(default_factory=lambda: [255, 255, 255])
     shadow_color: List[int] = field(default_factory=lambda: [0, 0, 0, 128])
     font_family: str = "arial"
-    font_size_ratio: float = 0.05
-    text_padding_bottom_ratio: float = 0.04
+    font_size: int = 72  # Font size in points
+    text_padding: int = 40  # Text padding in pixels
 
 
 @dataclass

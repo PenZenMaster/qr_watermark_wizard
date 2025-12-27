@@ -156,7 +156,7 @@ class GenerationOrchestrator:
                 progress_callback(50, "Primary provider failed, trying fallback")
 
             fallback_provider, fallback_name = self._get_fallback_provider()
-            if not fallback_provider:
+            if not fallback_provider or not fallback_name:
                 raise ProviderError(
                     "Primary provider failed and no fallback available",
                     provider_name,
