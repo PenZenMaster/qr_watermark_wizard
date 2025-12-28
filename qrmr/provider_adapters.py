@@ -202,6 +202,9 @@ class FalProvider:
         """
         Generate images via Fal.ai API with retry logic.
 
+        Note: FLUX.2 [flex] doesn't support num_images parameter.
+        For multiple images, we make multiple sequential API calls.
+
         Args:
             req: Generation request parameters
 
@@ -219,63 +222,94 @@ class FalProvider:
                 details={"model": self._model},
             )
 
-        last_error: Optional[Exception] = None
+        # FLUX.2 [flex] doesn't support num_images - make multiple calls
+        num_images_requested = req.num_images
+        all_images: List[GeneratedImage] = []
+        last_request_id: Optional[str] = None
 
-        for attempt in range(self._max_retries):
-            try:
-                # Map our request to Fal.ai format
-                fal_request = self._map_request(req)
+        for img_idx in range(num_images_requested):
+            print(f"[INFO] Generating image {img_idx + 1}/{num_images_requested}...")
 
-                # Call Fal.ai API using subscribe (blocking with queue support)
-                # Set FAL_KEY for this request
-                os.environ["FAL_KEY"] = self._api_key
+            last_error: Optional[Exception] = None
 
-                result = fal_client.subscribe(
-                    self._model,
-                    arguments=fal_request,
-                    with_logs=False,
-                )
+            for attempt in range(self._max_retries):
+                try:
+                    # Map our request to Fal.ai format (always request 1 image)
+                    fal_request = self._map_request(req)
 
-                # Parse response
-                return self._parse_response(result, req)
+                    # Call Fal.ai API using subscribe (blocking with queue support)
+                    # Set FAL_KEY for this request
+                    os.environ["FAL_KEY"] = self._api_key
 
-            except Exception as e:
-                last_error = e
+                    result = fal_client.subscribe(
+                        self._model,
+                        arguments=fal_request,
+                        with_logs=False,
+                    )
 
-                # Don't retry on authentication errors
-                if "auth" in str(e).lower() or "api key" in str(e).lower():
-                    raise ProviderError(
-                        message=f"Fal.ai authentication failed: {str(e)}",
-                        provider=self.name,
-                        details={"model": self._model, "error": str(e)},
-                    ) from e
+                    # Parse response (returns 1 image)
+                    single_result = self._parse_response(result, req)
+                    all_images.extend(single_result.images)
+                    last_request_id = single_result.request_id
 
-                # Exponential backoff before retry
-                if attempt < self._max_retries - 1:
-                    backoff_time = 2**attempt  # 1s, 2s, 4s
-                    time.sleep(backoff_time)
-                    continue
+                    print(
+                        f"[SUCCESS] Generated image {img_idx + 1}/{num_images_requested}"
+                    )
+                    break  # Success, move to next image
 
-        # All retries exhausted
-        raise ProviderError(
-            message=f"Fal.ai generation failed after {self._max_retries} attempts: {str(last_error)}",
-            provider=self.name,
-            details={
-                "model": self._model,
-                "error": str(last_error),
-                "attempts": self._max_retries,
-            },
-        ) from last_error
+                except Exception as e:
+                    last_error = e
+
+                    # Don't retry on authentication errors
+                    if "auth" in str(e).lower() or "api key" in str(e).lower():
+                        raise ProviderError(
+                            message=f"Fal.ai authentication failed: {str(e)}",
+                            provider=self.name,
+                            details={"model": self._model, "error": str(e)},
+                        ) from e
+
+                    # Exponential backoff before retry
+                    if attempt < self._max_retries - 1:
+                        backoff_time = 2**attempt  # 1s, 2s, 4s
+                        print(
+                            f"[WARNING] Generation attempt {attempt + 1} failed, retrying in {backoff_time}s..."
+                        )
+                        time.sleep(backoff_time)
+                        continue
+
+            # If all retries exhausted for this image, fail the entire request
+            if last_error is not None and len(all_images) == img_idx:
+                raise ProviderError(
+                    message=f"Fal.ai generation failed for image {img_idx + 1}/{num_images_requested} after {self._max_retries} attempts: {str(last_error)}",
+                    provider=self.name,
+                    details={
+                        "model": self._model,
+                        "error": str(last_error),
+                        "attempts": self._max_retries,
+                        "images_generated": len(all_images),
+                        "images_requested": num_images_requested,
+                    },
+                ) from last_error
+
+        # Return combined result
+        return GenerateResult(
+            images=all_images,
+            request_id=last_request_id,
+            raw={"num_images_generated": len(all_images)},
+        )
 
     def _map_request(self, req: GenerateRequest) -> Dict[str, Any]:
-        """Map our GenerateRequest to Fal.ai API format."""
+        """Map our GenerateRequest to Fal.ai API format.
+
+        Note: num_images is NOT included - FLUX.2 [flex] doesn't support it.
+        We handle multiple images by making multiple API calls in generate().
+        """
         # Map image dimensions to Fal.ai image_size format
         image_size = self._get_image_size(req.width, req.height)
 
         fal_params: Dict[str, Any] = {
             "prompt": req.prompt,
             "image_size": image_size,
-            "num_images": req.num_images,
             "enable_safety_checker": True,
             "output_format": "jpeg",
         }
@@ -331,6 +365,7 @@ class FalProvider:
     ) -> GenerateResult:
         """Parse Fal.ai API response into our GenerateResult format."""
         images: List[GeneratedImage] = []
+        download_warnings: List[str] = []
 
         # Extract images from response
         raw_images = result.get("images", [])
@@ -340,9 +375,15 @@ class FalProvider:
             # Download image bytes from URL
             image_url = img_data.get("url")
             if not image_url:
+                warning = f"Image {idx + 1}/{len(raw_images)}: No URL in response"
+                download_warnings.append(warning)
+                print(f"[WARNING] {warning}")
                 continue
 
             try:
+                print(
+                    f"[INFO] Downloading image {idx + 1}/{len(raw_images)} from {image_url[:60]}..."
+                )
                 response = requests.get(image_url, timeout=30)
                 response.raise_for_status()
                 image_bytes = response.content
@@ -366,16 +407,32 @@ class FalProvider:
                         },
                     )
                 )
-            except requests.RequestException:
+                print(
+                    f"[SUCCESS] Downloaded image {idx + 1}/{len(raw_images)} ({len(image_bytes)} bytes)"
+                )
+            except requests.RequestException as e:
                 # Log warning but don't fail entire request
+                warning = (
+                    f"Image {idx + 1}/{len(raw_images)}: Download failed - {str(e)}"
+                )
+                download_warnings.append(warning)
+                print(f"[ERROR] {warning}")
                 continue
 
         if not images:
             raise ProviderError(
                 message="No images generated",
                 provider=self.name,
-                details={"response": result},
+                details={"response": result, "warnings": download_warnings},
             )
+
+        # If some images failed, show warning but continue
+        if download_warnings:
+            print(
+                f"[WARNING] Generated {len(images)}/{len(raw_images)} images (some downloads failed)"
+            )
+            for warning in download_warnings:
+                print(f"  - {warning}")
 
         return GenerateResult(
             images=images,
@@ -610,17 +667,24 @@ class IdeogramProvider:
     ) -> GenerateResult:
         """Parse Ideogram API response into our GenerateResult format."""
         images: List[GeneratedImage] = []
+        download_warnings: List[str] = []
 
         # Extract images from response
         data_items = result.get("data", [])
 
-        for item in data_items:
+        for idx, item in enumerate(data_items):
             # Download image bytes from URL
             image_url = item.get("url")
             if not image_url:
+                warning = f"Image {idx + 1}/{len(data_items)}: No URL in response"
+                download_warnings.append(warning)
+                print(f"[WARNING] {warning}")
                 continue
 
             try:
+                print(
+                    f"[INFO] Downloading image {idx + 1}/{len(data_items)} from {image_url[:60]}..."
+                )
                 response = requests.get(image_url, timeout=30)
                 response.raise_for_status()
                 image_bytes = response.content
@@ -654,16 +718,32 @@ class IdeogramProvider:
                         },
                     )
                 )
-            except requests.RequestException:
+                print(
+                    f"[SUCCESS] Downloaded image {idx + 1}/{len(data_items)} ({len(image_bytes)} bytes)"
+                )
+            except requests.RequestException as e:
                 # Log warning but don't fail entire request
+                warning = (
+                    f"Image {idx + 1}/{len(data_items)}: Download failed - {str(e)}"
+                )
+                download_warnings.append(warning)
+                print(f"[ERROR] {warning}")
                 continue
 
         if not images:
             raise ProviderError(
                 message="No images generated",
                 provider=self.name,
-                details={"response": result},
+                details={"response": result, "warnings": download_warnings},
             )
+
+        # If some images failed, show warning but continue
+        if download_warnings:
+            print(
+                f"[WARNING] Generated {len(images)}/{len(data_items)} images (some downloads failed)"
+            )
+            for warning in download_warnings:
+                print(f"  - {warning}")
 
         return GenerateResult(
             images=images,

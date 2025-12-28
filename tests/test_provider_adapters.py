@@ -199,7 +199,11 @@ class TestFalProvider:
             assert mock_fal_client.subscribe.call_count == 2
 
     def test_map_request_basic(self):
-        """Test basic request parameter mapping."""
+        """Test basic request parameter mapping.
+
+        Note: num_images is NOT in the mapped request because FLUX.2 [flex]
+        doesn't support it. Multiple images are handled in generate() method.
+        """
         provider = FalProvider(api_key="test-key")
         request = GenerateRequest(
             prompt="test prompt",
@@ -211,7 +215,7 @@ class TestFalProvider:
         fal_request = provider._map_request(request)
 
         assert fal_request["prompt"] == "test prompt"
-        assert fal_request["num_images"] == 2
+        assert "num_images" not in fal_request  # FLUX.2 doesn't support this
         assert fal_request["image_size"] == "square_hd"
         assert fal_request["enable_safety_checker"] is True
         assert fal_request["output_format"] == "jpeg"

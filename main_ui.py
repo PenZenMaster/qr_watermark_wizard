@@ -1980,6 +1980,13 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             if not output_dir:
                 output_dir = os.path.join(os.getcwd(), "generated_images")
 
+            print(f"[INFO] Output directory: {output_dir}")
+            print(f"[INFO] Number of images to save: {len(images)}")
+
+            # Normalize path for Windows (convert forward slashes to backslashes)
+            output_dir = os.path.normpath(output_dir)
+            print(f"[INFO] Normalized path: {output_dir}")
+
             # Create directory if it doesn't exist
             os.makedirs(output_dir, exist_ok=True)
 
@@ -1990,6 +1997,7 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             for idx, img in enumerate(images):
                 filename = f"ai_generated_{timestamp}_{idx + 1}.png"
                 filepath = os.path.join(output_dir, filename)
+                print(f"[INFO] Saving image {idx + 1}/{len(images)} to: {filepath}")
                 img.save(filepath, "PNG")
                 saved_paths.append(filepath)
                 print(f"[SUCCESS] Saved generated image: {filepath}")
@@ -1997,7 +2005,10 @@ class WatermarkWizard(QtWidgets.QMainWindow):
             return saved_paths
 
         except Exception as e:
+            import traceback
+
             print(f"[ERROR] Failed to auto-save images: {e}")
+            print(f"[ERROR] Traceback: {traceback.format_exc()}")
             return []
 
     def on_ai_generation_finished(self, images: List[Image.Image]) -> None:
