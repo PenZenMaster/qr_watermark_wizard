@@ -1,6 +1,6 @@
 # QR Watermark Wizard - Project Status
 
-## Current Status: v2.1.0 - AI Integration Phase 3 Complete (Full UI)
+## Current Status: v3.0.0 - Multi-Image Generation Fixed, Ratio Refactor Complete
 
 ### Completed Features
 
@@ -56,13 +56,21 @@
   - Send to watermark workflow integration
   - Error handling with user-friendly messages
 
-- **Quality & Testing** (v2.1.0)
-  - 166 comprehensive unit tests (pytest framework)
+- **Quality & Testing** (v3.0.0)
+  - 167 comprehensive unit tests (pytest framework)
   - Pre-commit hooks (Ruff, Black, MyPy, Pytest, Bandit)
   - Semantic versioning implemented
   - Type checking with MyPy (100% passing)
   - Security scanning with Bandit
   - All quality gates passing
+
+- **v3.0.0 Breaking Changes**
+  - Removed all ratio-based measurements (qr_size_ratio, font_size_ratio, etc.)
+  - Replaced with direct pixel/point values for better user control
+  - Updated all 3 profile YAMLs to use new field names
+  - UI now shows font sizes in points (72pt) instead of ratios (0.05)
+  - Added auto-save for AI generated images
+  - Added Skippy the Magnificent to About dialog
 
 ### Current Configuration
 - **Client**: Salvo Metal Works
@@ -75,7 +83,25 @@
 - **Output**: 8 processed watermarked images
 - **Recent Processing**: Copper dormer installations and custom finials
 
-## Completed This Session (2025-12-26)
+## Completed This Session (2025-12-27)
+- **Fixed Multi-Image Generation Bug (CRITICAL)**
+  - Root cause: Fal.ai FLUX.2 [flex] model doesn't support num_images parameter
+  - Modified FalProvider.generate() to make multiple sequential API calls
+  - User QA confirmed: 4/4 images now generate and save successfully
+  - Removed unsupported num_images from API request mapping
+- **Enhanced Provider Download Logging**
+  - Added progress tracking for each image download (1/4, 2/4, etc.)
+  - Success logging with file sizes
+  - Error tracking with specific failure reasons
+  - Warning summaries for partial failures
+- **Fixed Windows Path Normalization Issues**
+  - Added os.path.normpath() to resolve Errno 22 (Invalid argument)
+  - Enhanced error diagnostics with full tracebacks
+  - Fixed mixed forward/backward slash issues in Windows paths
+- **Quality Gates**: All 167 tests passing, all pre-commit hooks passing
+- **Commit**: 1a753e4 (fix: multi-image generation for Fal.ai FLUX.2 model)
+
+## Completed Previous Session (2025-12-26)
 - **AI Integration Phase 3 (UI)**: Complete AI Generation tab implementation
   - Created AIGenerationThread worker class for async image generation
   - Implemented AI Generation tab with QTabWidget integration
@@ -93,7 +119,7 @@
 - **Quality Gates**: All 166 tests passing, all pre-commit hooks passing
 
 ## In Progress
-- None (Phase 3 complete - awaiting user testing with API keys)
+- None (all critical bugs resolved)
 
 ## Deferred
 - Enhanced preview/review workflow with image approval queue (Future)
@@ -104,10 +130,10 @@
 - CLI pipeline runner (Future)
 
 ## Next Session Priorities
-1. **User Testing with API Keys** - Validate AI Generation with real provider credentials
-2. **Bug Fixes & Refinements** - Address any issues found during testing
-3. **Documentation** - Add user guide for AI Generation feature
-4. **Future Enhancements** - Profile management, batch generation, advanced controls
+1. **Profile System Testing** - Test creating/editing profiles with new pixel/point spinboxes
+2. **Documentation Update** - Update README.md with v3.0.0 breaking changes and migration notes
+3. **User Feature Requests** - Address any new feature requests or bug reports
+4. **Future Enhancements** - Profile management UI, batch generation queue, advanced controls
 
 ## Backlog
 - Integration with cloud storage services
@@ -116,4 +142,4 @@
 - Additional image format support beyond JPG/PNG/WEBP
 
 ---
-*Last Updated: 2025-12-26*
+*Last Updated: 2025-12-27*

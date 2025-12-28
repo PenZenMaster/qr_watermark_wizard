@@ -1,36 +1,36 @@
 # QR Watermark Wizard - Startup Context
 
-**Last Updated:** 2025-12-26 17:30
+**Last Updated:** 2025-12-27 18:15
 **Branch:** main
-**Commit:** c0591d5
+**Commit:** 1a753e4
 
 ---
 
 ## Last 3 Accomplishments
 
-1. **Complete Ratio Refactor (BREAKING)** - Removed ALL ratio measurements (qr_size_ratio, font_size_ratio, text_padding_bottom_ratio, qr_padding_vh_ratio). Replaced with direct pixel/point values across entire codebase (qr_watermark.py, config_schema.py, main_ui.py, all profile YAMLs, all tests). User workflow restored - can now preview font sizes in points (72pt) instead of confusing ratios (0.05).
+1. **Fixed Multi-Image Generation Bug** - Fal.ai FLUX.2 model doesn't support num_images parameter. Modified FalProvider to make multiple sequential API calls (1 per image). User QA confirmed: 4/4 images now generate and save successfully.
 
-2. **AI Generation Auto-Save** - Fixed issue where generated images were only in memory. Added `_auto_save_generated_images()` method that auto-saves to `generation_output_dir` immediately after generation. Success message now shows save location.
+2. **Enhanced Provider Logging** - Added detailed download progress tracking across all providers (Fal, Ideogram, Stability). Shows success/failure for each image with file sizes and error details.
 
-3. **v3.0.0 Release** - Added Skippy the Magnificent to Help -> About dialog (custom QDialog with scaled image). Updated all version references to v3.0.0. Committed, pushed, and checkpointed.
+3. **Fixed Windows Path Issues** - Added os.path.normpath() to auto-save function to resolve Errno 22 (Invalid argument) caused by mixed forward/backward slashes in paths. Enhanced error diagnostics with full tracebacks.
 
 ---
 
 ## Next 3 Priorities
 
-1. **User QA Testing** - Verify watermarking works correctly with direct pixel/point values on real images
+1. **Profile System Testing** - Test creating/editing profiles with new pixel/point spinboxes in profile editor (from v3.0.0 ratio refactor)
 
-2. **Profile System Testing** - Test creating/editing profiles with new pixel/point spinboxes in profile editor
+2. **Documentation Update** - Update README.md with v3.0.0 breaking changes and migration notes if needed
 
-3. **Documentation Update** - Update README.md with v3.0.0 breaking changes and migration notes if needed
+3. **User Feature Requests** - Address any new feature requests or bug reports from users
 
 ---
 
 ## Current State
 
-**Git Status:** Clean working tree, all changes committed and pushed
+**Git Status:** Clean working tree (config/settings.json has local user settings - not committed)
 **Tests:** 167/167 passing (pytest)
-**Quality Gates:** All passing (ruff, black, mypy)
+**Quality Gates:** All passing (ruff, black, mypy, bandit)
 **Branch:** main (up to date with origin/main)
 
 **Blockers:** None
@@ -39,8 +39,8 @@
 
 ## Key Context Notes
 
-1. **BREAKING CHANGE:** All ratio fields removed from WatermarkConfig dataclass. Existing profiles MUST use new field names (qr_size, font_size, text_padding, qr_padding) or app will fail to load.
+1. **Multi-Image Generation**: FLUX.2 [flex] model requires multiple API calls for num_images > 1. Each image is a separate request. This is working correctly now with proper progress tracking.
 
-2. **Profile YAML Migration:** All 3 existing profiles updated (default-client, easy-dumpster-rental, easy-dumpster-sarasota-fl). Any new profiles created externally must use pixel/point fields.
+2. **Path Normalization**: Windows systems require os.path.normpath() for paths with mixed slashes. Auto-save now handles this correctly.
 
-3. **Auto-Save Behavior:** AI generation now auto-saves immediately to `generation_output_dir`. Images still show in preview grid and can be manually saved or sent to watermark input directory.
+3. **v3.0.0 Breaking Change**: All ratio fields removed from WatermarkConfig dataclass. Existing profiles MUST use new field names (qr_size, font_size, text_padding, qr_padding).
